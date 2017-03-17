@@ -1,3 +1,6 @@
+WARNING: we are still making preparations towards a public usable release. You can use this repo as a preview, but expect
+some massive changes until we stabilize things.
+
 # Withings Deployer
 
 The deployer is the deployment service used by the Platform team at Withings (now part of Nokia Tech).
