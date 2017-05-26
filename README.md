@@ -23,6 +23,7 @@ The deployer is targeted at environments where:
 
 It requires Python 2.7, a SQL database, and SSH access to the target hosts. That's about it (fine print
 below).
+
 The frontend is a Javascript application is written in Redux + React ; to use it, you will need an external
 authentification service (details also below).
 
@@ -137,12 +138,12 @@ The deployer can support two authentification methods:
 * username + token
 * sessionid
 
-Out-of-the box (using the deployment.integration.DummyIntegration module), the deployer provides
+Out-of-the box (using the `deployment.integration.DummyIntegration` module), the deployer provides
 authentification by username + password (we call this 'token-based' authentification, the token being the password).
 Note that this is not supported by the web UI ; to use the web UI, you will need to write a sessionid
 authentification plugin.
 
-See the source for deployment/integration/DummyIntegration for details.
+See the source for `deployment/integration/DummyIntegration.py` for details.
 
 In its database, the deployer stores two identifying fields for each user:
 * accountid (this is a user ID, but called accountid because of historical reasons)
@@ -210,13 +211,13 @@ The web UI should allow you to perform all day-to-day actions.
 ### Deployment scripts
 
 Deployed repositories can contain the following scripts:
-* predeploy.sh: run with the user the deployer is running as, on the same server as the deployer, before the
+* `predeploy.sh`: run with the user the deployer is running as, on the same server as the deployer, before the
   deployment. Can be used as a poor man build system.
-* tests/run_local_tests.sh: run in the same conditions as the predeploy.sh script
-* deploy.sh: run on each target server, after the deployment
-* tests/run_tests.sh: run in the same conditions as the deploy.sh script
+* `tests/run_local_tests.sh`: run in the same conditions as the predeploy.sh script
+* `deploy.sh`: run on each target server, after the deployment
+* `tests/run_tests.sh`: run in the same conditions as the deploy.sh script
 
-These scripts can receive some parameters as CLI args (repository name, environment, server...).
+These scripts will receive some parameters as CLI args (repository name, environment, server...).
 
 ## Developing
 
