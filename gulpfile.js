@@ -41,7 +41,8 @@ function makeBuild(development) {
             HIDE_HOSTNAME_SUFFIXES: buildConfig.hideHostnameSuffixes,
             REFERENCE_MAIL: buildConfig.referenceMail,
             AUTH_PAGE: buildConfig.authPage,
-            SESSIONID_COOKIE: buildConfig.sessionidCookie
+            SESSIONID_COOKIE: buildConfig.sessionidCookie,
+            DEFAULT_TARGET_PATH: buildConfig.defaultTargetPath
         }));
         return bundle;
     };
@@ -74,7 +75,7 @@ gulp.task('assets', function() {
 gulp.task('build', ['assets'], function() {
     var manifest = gulp.src("./web/static/js/rev-manifest.json");
 
-    return gulp.src("./web/index.html")
+    return gulp.src("./web/static/index.html")
         .pipe(revReplace({manifest: manifest}))
         .pipe(gulp.dest("./web/static/html/"));
 });

@@ -7,6 +7,6 @@ import logging
 
 class TestSupervisor(TestCase):
 
-	def test_import_class(self):
-		logger_class = _import_class('logging.Logger')
-		self.assertEqual(logger_class, logging.Logger)
+    def test_import_class(self):
+        logger_class = _import_class('logging.Logger')
+        self.assertEqual(logger_class, logging.Logger)

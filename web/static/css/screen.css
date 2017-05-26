@@ -1,0 +1,117 @@
+.ellipsis {
+    opacity: 0;
+    -webkit-animation: dot 1.5s infinite;
+     animation: dot 1.5s infinite;
+}
+
+.ellipsis span:nth-child(1) {
+    -webkit-animation-delay: 0.0s;
+    animation-delay: 0.0s;
+}
+
+.ellipsis span:nth-child(2) {
+    -webkit-animation-delay: 0.5s;
+      animation-delay: 0.5s;
+}
+
+.ellipsis span:nth-child(3) {
+    -webkit-animation-delay: 1.0s;
+     animation-delay: 1.0s;
+}
+
+@-webkit-keyframes dot {
+      0% { opacity: 0; }
+     50% { opacity: 0; }
+    100% { opacity: 1; }
+}
+
+@keyframes dot {
+      0% { opacity: 0; }
+     50% { opacity: 0; }
+    100% { opacity: 1; }
+}
+
+/* Fix bootstrap setting requiring the active class to be on the li */
+.nav-pills > li > a.active,
+.nav-pills > li > a:hover.active,
+.nav-pills > li > a:focus.active {
+  background-color: #222;
+}
+
+.vertical-text {
+    display: inline-block;
+    overflow: hidden;
+    width: 1.5em;
+}
+
+.vertical-text__inner {
+    display: inline-block;
+    white-space: nowrap;
+    line-height: 1.5em;
+    transform: translate(0,100%) rotate(-90deg);
+    transform-origin: 0 0;
+}
+
+.vertical-text__inner:after {
+    content: "";
+    display: block;
+    margin: -1.2em 0 100%;
+}
+
+.td-small {
+    width: 1.5em;
+}
+
+.td-striped {
+    background-color: #424242;
+}
+
+.deploy-logs {
+    padding: 5px;
+    border-style: solid;
+    border-width: 1px;
+    border-color: #282828;
+    white-space: pre-wrap;
+}
+
+.deploy-logs.limit-height {
+    max-height: 250px;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.deploy-logs p {
+    margin-bottom: 0.1em;
+    font-size: 12px;
+}
+
+.diff h5 {
+    margin-top: 2.5em;
+}
+
+.diff p {
+    margin-bottom: 0.1em;
+}
+
+.form-align {
+    padding-top: 8px;
+}
+
+select.form-control option {
+    background-color: #181818;
+}
+
+select.form-control {
+    background-color: #181818;
+    border-color: #424242;
+}
+
+::-webkit-input-placeholder { /* WebKit, Blink, Edge */
+   opacity:  0.7;
+}
+::-moz-placeholder { /* Mozilla Firefox 19+ */
+   opacity:  0.7;
+}
+:-ms-input-placeholder { /* Internet Explorer 10-11 */
+   opacity:  0.7;
+}

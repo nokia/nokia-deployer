@@ -1,0 +1,16 @@
+# Python
+*.pyc
+venv/
+*.egg-info
+
+
+# nose
+.noseids
+
+# vi
+tags
+
+# web
+node_modules
+web/static/js
+web/static/html
