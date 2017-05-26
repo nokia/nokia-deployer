@@ -4,7 +4,8 @@ A simple yet effective web service to deploy code from Git repositories.
 
 This tool was developed at Withings (now part of Nokia Technologies France), where it powers about a hundred deployments per day during business hours, on more than a hundred hosts.
 It is designed for simplicity, ease of operation (for sysadmins), and ease of use (for developers).
-It provides both a web API and a [web UI](./screenshot.png).
+
+![screenshot of the repository page](./screenshot.png)
 
 
 ## Overview
