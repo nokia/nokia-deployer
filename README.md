@@ -242,8 +242,11 @@ perform manual integration testing (and write more tests).
 
 ## Alternatives
 
-We are not aware of a lot of easy to operate, self-hosted open-source alternatives (that's why we built this deployer).
-If you have scalability requirements that this tool can not handle, you should have a look at [Teletraan](https://github.com/pinterest/teletraan).
+We are not aware of a lot of easy to operate, self-hosted open-source alternatives with a similar feature set (that's why we built this deployer).
+
+One of the closest alternatives is probably [deployinator](https://github.com/etsy/deployinator). Written in Ruby, this tool shares most of our ideas about how a deployment process should look like.
+
+If you have scalability requirements that the deployer can not handle, you should have a look at [Teletraan](https://github.com/pinterest/teletraan).
 
 ## License
 
