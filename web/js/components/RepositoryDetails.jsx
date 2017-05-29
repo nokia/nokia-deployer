@@ -125,9 +125,9 @@ const RepositoryDetails = React.createClass({
                 <h2>{repository.get('name')}</h2>
                 <div className="row">
                     <div className="col-md-4">
-                        <DetailsBlock 
+                        <DetailsBlock
                             repositoryId={repository.get('id')}
-                            deployMethod={repository.get('deploytMethod')}
+                            deployMethod={repository.get('deployMethod')}
                             gitServer={repository.get('gitServer')}
                             notifyOwnersMails={repository.get('notifyOwnersMails')}
                             isSuperAdmin={this.context.user && this.context.user.get('isSuperAdmin')} />
