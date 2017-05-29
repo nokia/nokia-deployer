@@ -24,7 +24,7 @@ The deployer is targeted at environments where:
 It requires Python 2.7, a SQL database, and SSH access to the target hosts. That's about it (fine print
 below).
 
-The frontend is a Javascript application is written in Redux + React ; to use it, you will need an external
+The frontend is a Javascript application written in Redux + React ; to use it, you will need an external
 authentification service (details also below).
 
 ### Notable features
