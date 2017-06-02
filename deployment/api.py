@@ -385,6 +385,9 @@ def deployments_list(repository_name, db):
         q = q.join(m.Environment).\
             filter(m.Environment.id.in_(request.account.readable_environments()))
     deploys = q.limit(50).all()
+    for deploy in deploys:
+        if deploy.user is not None:
+            deploy.username = deploy.user.username
     schema = m.DeploymentView.__marshmallow__(many=True)
     return json.dumps({'deployments': schema.dump(deploys).data})
 
@@ -667,6 +670,9 @@ def deployments_recent(db):
     deploys = q.order_by(m.DeploymentView.date_start_deploy.desc()).\
         limit(70).\
         all()
+    for deploy in deploys:
+        if deploy.user is not None:
+            deploy.username = deploy.user.username
     return json.dumps({'deployments': m.DeploymentView.__marshmallow__(many=True).dump(deploys).data})
 
 

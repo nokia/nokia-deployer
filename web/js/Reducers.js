@@ -292,7 +292,8 @@ function deploymentsByIdReducer(state = Map(), action) {
                 'commit': deployment.commit,
                 'branch': deployment.branch,
                 'id': deployment.id,
-                'user_id': deployment.user_id,
+                'user_id': deployment.user,
+                'username': deployment.username,
                 'date_start_deploy': moment.utc(deployment.date_start_deploy).freeze(),
                 'date_end_deploy': deployment.date_end_deploy ? moment.utc(deployment.date_end_deploy).freeze() : null,
                 'log_entries': deployment.log_entries ? Immutable.List(deployment.log_entries.map(entry => parseLogEntry(entry))) : Immutable.List()

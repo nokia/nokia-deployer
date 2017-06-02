@@ -119,6 +119,7 @@ class DeploymentViewSchema(BaseSchema):
     class Meta(BaseSchema.Meta):
         model = m.DeploymentView
     log_entries = fields.List(fields.Nested(LogEntrySchema))
+    username = fields.String()
 
 
 class RoleSchema(BaseSchema):

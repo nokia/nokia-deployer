@@ -46,6 +46,7 @@ const DeploymentList = React.createClass({
                         <th>Commit</th>
                         <th>Status</th>
                         <th>Started at</th>
+                        <th>Username</th>
                         <th>Logs</th>
                     </tr>
                 </thead>
@@ -81,6 +82,8 @@ const DeploymentList = React.createClass({
                                 <td>{that.formatCommit(deployment.get('commit'))}</td>
 				{ formattedStatus }
 				<td>{ deployment.get('date_start_deploy').local().format('YYYY-MM-DD HH:mm ZZ') }</td>
+
+                                <td>{deployment.get('username')}</td>
                                 <td><Link to={`/deployments/${deployment.get('id')}`} activeClassName="active">details</Link></td>
                             </tr>
                             );
