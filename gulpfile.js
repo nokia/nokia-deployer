@@ -81,7 +81,7 @@ gulp.task('build', ['assets'], function() {
 });
 
 gulp.task('dev', ['devAssets'], function() {
-    return gulp.src("./web/index.html")
+    return gulp.src("./web/static/index.html")
         .pipe(gulp.dest("./web/static/html/"));
 });
 
