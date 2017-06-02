@@ -4,7 +4,7 @@ import Cookies from 'cookies-js';
 
 const Auth = function() {
 
-    this.daemonUrl = `${window.location.protocol}//${window.location.hostname}`;
+    this.daemonUrl = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
     this._listeners = [];
     this._pendingRequests = [];
     this._loginInProgress = false;

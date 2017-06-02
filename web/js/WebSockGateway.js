@@ -101,7 +101,7 @@ if(location.protocol === 'https:') {
     prefix = "wss://";
 }
 
-const url = prefix + window.location.hostname;
+const url = prefix + window.location.hostname + ":9000";
 const webSockGateway = new WebSockGateway(url);
 webSockGateway.connect();
 
