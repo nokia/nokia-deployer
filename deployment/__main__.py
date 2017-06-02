@@ -56,6 +56,7 @@ def main():
         logger.error("Could not find a configuration file at {}".format(config_file))
     app = App(config_file)
     signal.signal(signal.SIGTERM, app.stop)
+    signal.signal(signal.SIGINT, app.stop)
     app.start()
 
 

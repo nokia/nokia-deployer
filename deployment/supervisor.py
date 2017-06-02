@@ -115,9 +115,11 @@ class WorkerSupervisor(object):
 
     def run(self):
         """Blocks until exit() is called (from another thread)"""
-        while self._running:
-            time.sleep(1)
-        self._exit()
+        try:
+            while self._running:
+                time.sleep(1)
+        finally:
+            self._exit()
 
     def _spawn_workers(self, workers):
         for w in workers:
