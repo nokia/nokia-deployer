@@ -418,11 +418,9 @@ function usersByIdReducer(state = Map(), action) {
     return state;
 }
 
-function websocketStateReducer(state = Map(), action) {
-    if(state == null) {
-        // This isn't pure, but is way simpler than any alternative
-        return Immutable.Map({lastPing: moment()});
-    }
+
+// This isn't pure (initial state depends on time), but is way simpler than any alternative
+function websocketStateReducer(state = Map({lastPing: moment().freeze()}), action) {
     switch(action.type) {
     case 'WEBSOCKET_PINGED':
         state = state.set('lastPing', action.payload.pingMoment);

@@ -32,7 +32,7 @@ const HeaderBar = React.createClass({
         this.forceUpdate();
     },
     checkLastPing() {
-        return moment().diff(this.props.websocketState.get('lastPing'), 'seconds') < 50;
+        return moment().diff(this.props.websocketState.get('lastPing'), 'seconds') < 5;
     },
     render() {
         return (
@@ -43,7 +43,7 @@ const HeaderBar = React.createClass({
                             <span className="navbar-brand navbar-link"><Link to='/' className='navbar-link'>デプロイ</Link></span>
                         </div>
                         <div className="nav navbar-nav navbar-right">
-                            { process.env.NODE_ENV === "development" ? <li><p className="navbar-text"><span className="text-warning">THIS IS A DEVELOPMENT VERSION!</span></p></li> : null } 
+                            { process.env.NODE_ENV === "development" ? <li><p className="navbar-text"><span className="text-warning">THIS IS A DEVELOPMENT VERSION!</span></p></li> : null }
                             { this.checkLastPing() ? null : <li><p className="navbar-text"><span className="text-warning">Server connectivity lost, please refresh the page.</span></p></li>}
                                 <li>{this.userInfo()}</li>
                                 <li>{this.logLink()}</li>
