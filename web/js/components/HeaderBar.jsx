@@ -32,7 +32,7 @@ const HeaderBar = React.createClass({
         this.forceUpdate();
     },
     checkLastPing() {
-        return moment().diff(this.props.websocketState.get('lastPing'), 'seconds') < 5;
+        return moment().diff(this.props.websocketState.get('lastPing'), 'seconds') < 15;
     },
     render() {
         return (
