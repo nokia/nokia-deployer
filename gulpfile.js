@@ -42,7 +42,8 @@ function makeBuild(development) {
             REFERENCE_MAIL: buildConfig.referenceMail,
             AUTH_PAGE: buildConfig.authPage,
             SESSIONID_COOKIE: buildConfig.sessionidCookie,
-            DEFAULT_TARGET_PATH: buildConfig.defaultTargetPath
+            DEFAULT_TARGET_PATH: buildConfig.defaultTargetPath,
+            WEBSOCKET_PORT: buildConfig.websocketPort
         }));
         return bundle;
     };

@@ -101,7 +101,7 @@ if(location.protocol === 'https:') {
     prefix = "wss://";
 }
 
-const url = prefix + window.location.hostname + ":9000";
+const url = prefix + window.location.hostname + ":" + process.env.WEBSOCKET_PORT;
 const webSockGateway = new WebSockGateway(url);
 webSockGateway.connect();
 

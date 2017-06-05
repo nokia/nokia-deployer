@@ -15,5 +15,9 @@ module.exports = {
     // deployer
     // This sessionid will then be exchanged against a deployer session token.
     'sessionidCookie': 'sessionid',
-    'authPage': 'https://cas.example.net/authentification?r={originUrl}'
+    'authPage': 'https://cas.example.net/authentification?r={originUrl}',
+    // the deployer does not listen on the same ports for websockets and HTTP
+    // if using HTTPS, you'll need to use a reverse proxy (HAProxy or nginx for instance) to multiplex HTTPS and WSS traffic
+    // TODO: fix that, listen on the same port
+    'websocketPort': '80'
 };
