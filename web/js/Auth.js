@@ -84,7 +84,7 @@ const Auth = function() {
         }
         this._emitStartLoginFlow();
         this._loginInProgress = true;
-        const sessionid = Cookies.get('session-admin_key');
+        const sessionid = Cookies.get(process.env.SESSIONID_COOKIE);
         if(!sessionid) {
             this._redirectToAccount();
         }
