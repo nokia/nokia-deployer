@@ -290,7 +290,7 @@ def get_commits_by_env(environment_id, db):
         return json.dumps({'commits': [], "info": "Git repository not cloned on the server"})
     commits = gitutils.LocalRepository(path).list_commits(env.deploy_branch, count=150)
     hexshas = [c.hexsha for c in commits]
-    parent_environments = db.query(m.Environment).filter(m.Environment.repository_name == env.repository_name).\
+    parent_environments = db.query(m.Environment).filter(m.Environment.repository_id == env.repository_id).\
         filter(m.Environment.env_order == env.env_order - 1).\
         filter(m.Environment.deploy_branch == env.deploy_branch).\
         all()
@@ -606,8 +606,7 @@ def repository_environments_post(repository_id, db):
         abort(404)
     schema = schemas.PostEnvironmentSchema()
     environment = schema.load(request.json, session=db).data
-    environment.repository_name = repository.name # Necessary since there is a non standard join condition
-    repository.environments.append(environment)
+    environment.repository_id = repository_id
     db.commit()
     return json.dumps({'environment': m.Environment.__marshmallow__().dump(environment).data})
 
@@ -714,7 +713,7 @@ def environments_start_deployment(environment_id, db):
     deploy_id = worker.create_deployment_job(
         default_app().config['deployer.beanstalk'],
         default_app().config['deployer.notifier'],
-        environment.repository_name,
+        environment.repository.name,
         environment.name,
         environment.id,
         cluster_id,

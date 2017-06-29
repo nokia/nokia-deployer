@@ -176,7 +176,7 @@ class GraphiteNotifier(object):
             return
         metric_name = "{}.deploy.{}".format(
             GraphiteNotifier.sanitize_for_graphite(deployment.environment.name),
-            GraphiteNotifier.sanitize_for_graphite(deployment.environment.repository_name)
+            GraphiteNotifier.sanitize_for_graphite(deployment.environment.repository.name)
         )
         metric_val = 1
         message = '{} {} {}\n'.format(metric_name, metric_val, int(time.time()))
@@ -239,7 +239,7 @@ Completed: {date_end}
         status = "was successful" if was_successful else "failed"
         short_status = "success" if was_successful else "failure"
         msg = template.format(status=short_status,
-                              repository=deployment.environment.repository_name,
+                              repository=deployment.environment.repository.name,
                               branch=deployment.branch,
                               commit=deployment.commit,
                               date_start=deployment.date_start_deploy,

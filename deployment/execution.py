@@ -200,7 +200,7 @@ class Deployment(object):
         self._update_status(DeploymentStatus.INIT, session)
         self.notifier.dispatch(Notification.deployment_configuration_loaded(self.view))
         environment = self.view.environment
-        self.log.prefix = "[{} {}/{}]".format(self.view.id, environment.name, environment.repository_name)
+        self.log.prefix = "[{} {}/{}]".format(self.view.id, environment.name, environment.repository.name)
 
         # Check whether we can proceed (permissions)
         run_step(self, check_deploy_allowed, self.view.user, environment.id, environment.name)
@@ -222,7 +222,7 @@ class Deployment(object):
 
         self.artifact = run_step(
             self, detect_artifact, local_repo_path, environment.repository.git_server,
-            environment.repository_name, self.view.commit, environment.name, self.artifact_detector
+            environment.repository.name, self.view.commit, environment.name, self.artifact_detector
         )
         run_step(self, get_artifact, self.artifact)
 
@@ -288,7 +288,7 @@ class Deployment(object):
         screenshot_files = None
         if 'url' in deploy_conf and environment.name in deploy_conf['url']:
             screenshot_files = run_step(self, screenshot, deploy_conf['url'][environment.name],
-                                        environment.repository_name, environment.name)
+                                        environment.repository.name, environment.name)
         return screenshot_files
 
     def execute(self):
@@ -308,7 +308,7 @@ class Deployment(object):
                 mail_sender = self.general_config.mail_sender
 
                 # Ensure the repo exist on disk
-                run_step(self, clone_repo, local_repo_path, environment.repository_name, environment.repository.git_server)
+                run_step(self, clone_repo, local_repo_path, environment.repository.name, environment.repository.git_server)
 
                 with gitutils.lock_repository_write(local_repo_path) as repo:
                     self._get_artifact(local_repo_path, repo, mail_sender, mail_test_report_to)
@@ -796,7 +796,7 @@ def run_test(environment, branch, commit, host, mail_sender, local, local_repo_p
     Return:
         None if no test is defined, else a TestReport object
     """
-    repository_name = environment.repository_name
+    repository_name = environment.repository.name
     # Check whether tests are defined
     if local:
         if local_repo_path is None:

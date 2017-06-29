@@ -162,6 +162,8 @@ class Repository(Base):
     git_server = sa.Column(sa.String(255), nullable=False)
     _notify_owners_mails = sa.Column("notify_owners_mails", sa.String(255), nullable=False, default='')
 
+    environments = orm.relationship("Environment", back_populates="repository")
+
     @property
     def notify_owners_mails(self):
         if self._notify_owners_mails is None:
@@ -177,7 +179,6 @@ class Environment(Base):
     __tablename__ = "environments"
 
     id = sa.Column(sa.Integer(), nullable=False, primary_key=True, autoincrement=True)
-    repository_name = sa.Column(sa.String(255), sa.ForeignKey("repositories.name"), nullable=False)
     name = sa.Column(sa.String(255), nullable=False)
     target_path = sa.Column(sa.String(255), nullable=False)
     auto_deploy = sa.Column(sa.Boolean(), nullable=False, default=False)
@@ -187,11 +188,9 @@ class Environment(Base):
     deploy_branch = sa.Column(sa.String(255), nullable=False, default='')
     fail_deploy_on_failed_tests = sa.Column(sa.Boolean, nullable=False, default=True)
 
-    # TODO: remove this primaryjoin, use a foreign key instead
-    # (historical reasons and the like...)
-    repository = orm.relationship(
-        "Repository",
-        backref=orm.backref('environments'), primaryjoin="Environment.repository_name==Repository.name")
+    repository_id = sa.Column(sa.Integer, sa.ForeignKey("repositories.id"))
+
+    repository = orm.relationship("Repository", back_populates="environments")
     clusters = orm.relationship("Cluster", secondary="environments_clusters", back_populates="environments")
     deployments = orm.relationship("DeploymentView", back_populates="environment")
 
@@ -202,7 +201,7 @@ class Environment(Base):
     @property
     def local_repo_directory_name(self):
         valid_chars = "-_()%s%s" % (string.ascii_letters, string.digits)
-        return "".join([c if c in valid_chars else "_" for c in "{}_{}".format(self.repository_name, self.deploy_branch)])
+        return "".join([c if c in valid_chars else "_" for c in "{}_{}".format(self.repository.name, self.deploy_branch)])
 
     def release_path(self, branch, commit):
         """Return the path to the folder containing the code. It may then be symlinked to the 'production folder' (symlink deployment method) or be used as the production folder (inplace deployment method).

@@ -89,8 +89,7 @@ class EnvironmentSchema(BaseSchema):
     clusters = fields.Nested(ClusterSchema, many=True, exclude=("environments",))
     deploy_authorized = fields.Method("add_deploy_authorized")
     repository_id = fields.Function(lambda obj: obj.repository.id)
-    repository_name = fields.Function(lambda obj: obj.repository_name)
-    # TODO: normalize DB
+    repository_name = fields.Function(lambda obj: obj.repository.name, dump_only=True)
 
     def add_deploy_authorized(self, obj):
         if self.context and 'account' in self.context:

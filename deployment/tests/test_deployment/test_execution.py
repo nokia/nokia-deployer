@@ -147,8 +147,8 @@ class TestSteps(unittest.TestCase):
             m.Cluster(id=2, haproxy_host='fr-hq-vip-02', name='vip-02'),
         ]
         entities = [
-            m.Environment(id=1, repository_name="another repo", name="dev", clusters=[clusters[1]], target_path="/path"),
-            m.Environment(id=2, repository_name="my repo", name="dev", clusters=[clusters[0]], target_path="/path"),
+            m.Environment(id=1, repository_id=2, name="dev", clusters=[clusters[1]], target_path="/path"),
+            m.Environment(id=2, repository_id=1, name="dev", clusters=[clusters[0]], target_path="/path"),
             m.Role(id=1, name="admin", permissions=json.dumps({'admin': True}), users=[users[0]]),
             m.Role(id=2, name="deployer", permissions=json.dumps({'deploy_business_hours': [1]}), users=[users[1]]),
             m.Server(id=1, name='fr-hq-important-01', activated=True, port=22),

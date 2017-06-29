@@ -56,7 +56,9 @@ def create_deployment_job(beanstalk, notifier, repository_name, environment_name
 def handle_autodeploy_notification(repository_name, branch, commit, beanstalk, notifier, auto_deploy_account, deployer_urls):
     logger.debug('Autodeploy: got notification for repo {}, branch {}'.format(repository_name, branch))
     with database.session_scope() as session:
-        envs = session.query(m.Environment).filter(m.Environment.repository_name == repository_name).all()
+        envs = session.query(m.Environment).\
+            filter(m.Environment.repository_id == m.Repository.id).\
+            filter(m.Repository.name == repository_name).all()
         if commit is not None:
             auto_deploy_envs = [e for e in envs if e.auto_deploy and e.deploy_branch == branch]
         else:
@@ -100,7 +102,7 @@ class AsyncFetchWorker(object):
         klass.job_queue.put((
             environment.id,
             environment.local_repo_directory_name,
-            environment.repository_name,
+            environment.repository.name,
             environment.repository.git_server,
             environment.deploy_branch
         ))
