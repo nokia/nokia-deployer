@@ -188,7 +188,7 @@ class Environment(Base):
     deploy_branch = sa.Column(sa.String(255), nullable=False, default='')
     fail_deploy_on_failed_tests = sa.Column(sa.Boolean, nullable=False, default=True)
 
-    repository_id = sa.Column(sa.Integer, sa.ForeignKey("repositories.id"))
+    repository_id = sa.Column(sa.Integer, sa.ForeignKey("repositories.id"), nullable=False)
 
     repository = orm.relationship("Repository", back_populates="environments")
     clusters = orm.relationship("Cluster", secondary="environments_clusters", back_populates="environments")
