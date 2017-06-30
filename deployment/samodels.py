@@ -177,6 +177,7 @@ class Repository(Base):
 
 class Environment(Base):
     __tablename__ = "environments"
+    _table_args__ = (sa.Index('unique_environment_repository', "repository_id", "name", unique=True), )
 
     id = sa.Column(sa.Integer(), nullable=False, primary_key=True, autoincrement=True)
     name = sa.Column(sa.String(255), nullable=False)
