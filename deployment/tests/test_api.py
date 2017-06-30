@@ -490,7 +490,7 @@ class TestApi(unittest.TestCase):
     def test_env_order(self, mock):
         default_app().config["general.local_repo_path"] = "/tmp/deployerrepo"
         # Required, otherwise the API does not even try to read the commits (and so our mock is useless)
-        for env_id in range(2, 4):
+        for env_id in range(2, 5):
             dirname = self.session.query(m.Environment).get(env_id).local_repo_directory_name
             gitutils.mkdir_p(os.path.join("/tmp/deployerrepo", dirname))
         try:

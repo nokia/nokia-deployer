@@ -4,6 +4,8 @@ import os
 from shutil import rmtree
 from threading import Condition
 
+from sqlalchemy import func
+
 from deployment.database import session_scope
 from deployment.gitutils import lock_repository_write, lock_repository_fetch
 import deployment.samodels as m
@@ -34,17 +36,22 @@ class CleanerWorker():
         logger.info("Cleaner worker wakeup.")
         now = datetime.utcnow()
         with session_scope() as session:
-            envs = session.query(m.Environment).\
+            deletion_candidates = set(os.listdir(self.base_repos_path))
+            subquery = session.query(m.Environment.id, func.max(m.DeploymentView.queued_date).label("max_queued_date")).\
                 filter(m.Environment.id == m.DeploymentView.environment_id).\
-                filter(m.DeploymentView.queued_date < now - self.max_unused_age).\
+                group_by(m.Environment.id).subquery()
+            recently_deployed_envs = session.query(m.Environment).\
+                join((subquery, subquery.c.id == m.Environment.id)).\
+                filter(subquery.c.max_queued_date > now - self.max_unused_age).\
                 all()
-            for env in envs:
-                path = os.path.join(self.base_repos_path, env.local_repo_directory_name)
+            to_keep = set(e.local_repo_directory_name for e in recently_deployed_envs)
+            for path in deletion_candidates - to_keep:
+                path = os.path.join(self.base_repos_path, path)
                 if os.path.exists(path):
                     with lock_repository_fetch(path), lock_repository_write(path):
                         rmtree(path)
                     logger.info(
-                        "Deleted unused directory {}".format(env.local_repo_directory_name)
+                        "Deleted unused directory {}".format(path)
                     )
         logger.info("Cleaner worker going to sleep. Next wakeup in: {}".format(self.wakeup_period))
 

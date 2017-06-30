@@ -201,7 +201,7 @@ class Environment(Base):
     @property
     def local_repo_directory_name(self):
         valid_chars = "-_()%s%s" % (string.ascii_letters, string.digits)
-        return "".join([c if c in valid_chars else "_" for c in "{}_{}".format(self.repository.name, self.deploy_branch)])
+        return "".join([c if c in valid_chars else "_" for c in "{}_{}".format(self.repository.name, self.name)])
 
     def release_path(self, branch, commit):
         """Return the path to the folder containing the code. It may then be symlinked to the 'production folder' (symlink deployment method) or be used as the production folder (inplace deployment method).
