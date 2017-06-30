@@ -6,6 +6,7 @@ import * as Actions from '../../Actions';
 import { connect } from 'react-redux';
 import {Link} from 'react-router';
 import PureRenderMixin from 'react-addons-pure-render-mixin';
+import ConfirmationDialog from '../lib/ConfirmationDialog.jsx';
 
 const RepositoryList = React.createClass({
     mixins: [PureRenderMixin],
@@ -39,6 +40,17 @@ const RepositoryList = React.createClass({
     },
     componentWillMount() {
         this.fetchData();
+    },
+    deleteRepository(repository) {
+        const that = this;
+        return () => {
+            that.refs.confirmationDialog.show(
+                <span>Delete the repository <strong>{repository.get("name")}</strong>? This action can not be undone.</span>,
+                () => {
+                    that.props.dispatch(Actions.deleteRepository(repository.get("id")));
+                }
+            );
+        };
     },
     render() {
         const that = this;
@@ -78,12 +90,13 @@ const RepositoryList = React.createClass({
                             <div className="btn-group">
                                 <Link className="btn btn-sm btn-default" to={`/repositories/${repository.get('id')}`}>View</Link>
                                 <Link className="btn btn-sm btn-default" to={`/admin/repositories/${repository.get('id')}/edit`}>Edit</Link>
-                                <button className="btn btn-sm btn-danger">Delete</button>
+                                <button onClick={that.deleteRepository(repository)} className="btn btn-sm btn-danger">Delete</button>
                             </div>
                         </td>
                     </tr>).toList()}
                 </tbody>
             </table>
+            <ConfirmationDialog ref="confirmationDialog" />
         </div>);
     }
 });

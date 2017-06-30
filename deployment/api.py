@@ -611,6 +611,17 @@ def repository_environments_post(repository_id, db):
     return json.dumps({'environment': m.Environment.__marshmallow__().dump(environment).data})
 
 
+@delete('/api/repositories/<repository_id:int>')
+@requires_admin
+def repository_delete(repository_id, db):
+    repository = db.query(m.Repository).get(repository_id)
+    if repository is None:
+        abort(404)
+    db.delete(repository)
+    db.commit()
+    return json.dumps({'repository': m.Repository.__marshmallow__().dump(repository).data})
+
+
 @get('/api/environments')
 @requires_logged
 def environments_list(db):

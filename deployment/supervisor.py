@@ -13,6 +13,8 @@ from . import api
 from .worker import DeployerWorker, AsyncFetchWorker
 from . import execution, mail, notification, websocket, database
 from .log import configure_logging
+from .cleaner import CleanerWorker
+
 
 logger = getLogger(__name__)
 
@@ -110,6 +112,8 @@ class WorkerSupervisor(object):
 
         for worker in async_fetch_workers:
             workers.append(worker)
+
+        workers.append(CleanerWorker(general_config.base_repos_path))
 
         return workers
 

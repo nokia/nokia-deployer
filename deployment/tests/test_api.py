@@ -88,6 +88,7 @@ class TestApi(unittest.TestCase):
             m.ClusterServerAssociation(server_def=servers[1], cluster_def=clusters[0], haproxy_key="IMPORTANT-02"),
             m.Repository(id=1, name="my repo", git_server="git", deploy_method="inplace", _notify_owners_mails="toto@withings.com, tata@withings.com"),
             m.Repository(id=2, name="another repo", git_server="git", deploy_method="inplace", _notify_owners_mails="toto@withings.com, tata@withings.com"),
+            m.Repository(id=3, name="another repo again", git_server="git", deploy_method="inplace", _notify_owners_mails="toto@withings.com, tata@withings.com"),
             m.DeploymentView(id=1, repository_name="my repo", environment_name="dev", branch="master", commit="abcde", user_id=1, status="COMPLETE", queued_date=datetime.datetime.now(), date_start_deploy=datetime.datetime.now(), environment_id=2),
             m.DeploymentView(id=2, repository_name="my other repo", environment_name="dev", branch="master", commit="defg", user_id=1, status="DEPLOY", queued_date=datetime.datetime.now(), date_start_deploy=datetime.datetime.now(), environment_id=None),
             m.DeploymentView(id=3, repository_name="my repo", environment_name="beta", branch="prod", commit="defg", user_id=1, status="COMPLETE", queued_date=datetime.datetime.now(), date_start_deploy=datetime.datetime.now(), environment_id=3),
@@ -116,7 +117,7 @@ class TestApi(unittest.TestCase):
     def test_list_repositories(self):
         out = api.repositories_list(self.session)
         parsed = json.loads(out)
-        self.assertEqual(2, len(parsed['repositories']))
+        self.assertEqual(3, len(parsed['repositories']))
         repo = parsed['repositories'][0]
         self.assertEqual("my repo", repo['name'])
 
@@ -254,6 +255,11 @@ class TestApi(unittest.TestCase):
         out = api.repository_post(self.session)
         parsed = json.loads(out)
         self.assertEqual('new_repo', parsed['repository']['name'])
+
+    def test_delete_repository(self):
+        out = api.repository_delete(3, self.session)
+        parsed = json.loads(out)
+        self.assertEqual('another repo again', parsed['repository']['name'])
 
     def test_insert_environment(self):
         self._set_body_json({

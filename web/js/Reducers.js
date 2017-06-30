@@ -242,6 +242,14 @@ function repositoriesByIdReducer(state = Map(), action) {
             state = state.updateIn([environment.repository, 'environmentsId'], envIds => envIds.concat([environment.id]).toSet().toList());
         });
         break;
+    case 'DELETE_REPOSITORY':
+        if(action.payload.status != 'SUCCESS') {
+            break;
+        }
+        Object.values(action.payload.entities.repositories).map(repo => {
+            state = state.remove(repo.id);
+        });
+        break;
     }
     return state;
 }

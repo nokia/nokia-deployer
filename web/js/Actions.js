@@ -84,6 +84,7 @@ export const loadRepository = repositoryActions.get;
 export const loadRepositories = repositoryActions.list;
 export const editRepository = repositoryActions.edit;
 export const addRepository = repositoryActions.add;
+export const deleteRepository = repositoryActions.delete;
 
 export function loadEnvironmentCommits(environmentId) {
     const action = createAction('LOAD_ENVIRONMENT_COMMITS', (status, environmentId, commits) => ({
