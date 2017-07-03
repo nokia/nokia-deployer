@@ -267,6 +267,9 @@ const formatServerName = (server) => {
 
 const formatCommit = (details) => {
     if(details.get('statusCode') == 0) {
+        if(details.get('inProgress')) {
+            return "deploying " + details.get('commit').substring(0, 8);
+        }
         return details.get('commit').substring(0, 8);
     }
     return <span className="text-warning">Error: {details.get('message')}</span>;

@@ -206,9 +206,6 @@ class Commit(object):
         }
 
 
-def release_file_contents(branch, commit, date, destination_path):
-    return "\n".join([branch, commit, date.isoformat(), destination_path])
-
 
 class InvalidReleaseFile(Exception):
     pass
@@ -216,21 +213,43 @@ class InvalidReleaseFile(Exception):
 
 class Release(object):
 
-    def __init__(self, branch, commit, deployment_date):
+    DATE_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
+
+    def __init__(self, branch, commit, deployment_date, destination_path, in_progress=False):
         self.branch = branch
         self.deployment_date = deployment_date
         self.commit = commit
+        self.in_progress = in_progress
+        self.destination_path = destination_path
 
     def to_dict(self):
         return {
             'branch': self.branch,
-            'deployment_date': self.deployment_date,
-            'commit': self.commit
+            'deployment_date': self.deployment_date.strftime(self.DATE_FORMAT),
+            'commit': self.commit,
+            'in_progress': self.in_progress
         }
 
+    @classmethod
+    def from_string(klass, contents):
+        outs = contents.strip().split("\n")
+        if len(outs) <= 3:
+            raise InvalidReleaseFile()
+        if len(outs) >= 5:
+            in_progress = outs[4] == "deployment in progress"
+        else:
+            in_progress = False
+        try:
+            date = datetime.datetime.strptime(outs[2], klass.DATE_FORMAT)
+        except ValueError as e:
+            raise InvalidReleaseFile(str(e))
+        return klass(branch=outs[0], commit=outs[1], deployment_date=date,
+                     destination_path=outs[3], in_progress=in_progress)
 
-def parse_release_file_contents(contents):
-    outs = contents.strip().split("\n")
-    if len(outs) <= 2:
-        raise InvalidReleaseFile()
-    return Release(branch=outs[0], commit=outs[1], deployment_date=outs[2])
+    def to_string(self):
+        out = "\n".join([self.branch, self.commit,
+                         self.deployment_date.strftime(self.DATE_FORMAT),
+                         self.destination_path])
+        if self.in_progress:
+            out += "\ndeployment in progress"
+        return out

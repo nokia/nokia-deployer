@@ -131,3 +131,15 @@ class TestGitUtils(unittest.TestCase):
         commits = repo.look_for_file(self.first_commit_sha, self.second_commit_sha, "hi.txt")
         self.assertEqual(1, len(commits))
         self.assertEqual(self.second_commit_sha, commits[0].hexsha)
+
+    def test_release(self):
+        contents = """master
+215254b4d3a264f4d3eec7e881aa735448910586
+2017-06-30 14:23:21.000000
+/some/path"""
+        release = gitutils.Release.from_string(contents)
+        self.assertEquals(contents, release.to_string())
+        manual = gitutils.Release("master", "215254b4d3a264f4d3eec7e881aa735448910586", datetime(2017, 06, 30, 14, 23, 21), "/some/path")
+        self.assertEqual(contents, manual.to_string())
+        manual = gitutils.Release("master", "215254b4d3a264f4d3eec7e881aa735448910586", datetime(2017, 06, 30, 14, 23, 21), "/some/path", True)
+        self.assertEqual(contents + "\ndeployment in progress", manual.to_string())

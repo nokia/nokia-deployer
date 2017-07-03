@@ -311,11 +311,11 @@ class TestSteps(unittest.TestCase):
         host = executils.Host("fr-hq-deployment-01", "scaleweb", 22)
         self._unwind(execution.parallel_sync("/home/scaleweb/project", "-cr --delete-after", "master", "abcde", "/home/deploy/project/", [host], 1))
         mock_func.assert_has_calls([
-            mock.call(["rsync", "-e", "ssh -p 22", "--exclude=.git", "-cr", "--delete-after", "/home/deploy/project/", "scaleweb@fr-hq-deployment-01:/home/scaleweb/project/"]),
+            mock.call(["rsync", "-e", "ssh -p 22", "--exclude=.git", "-cr", "--delete-after", "--exclude", ".git_release", "/home/deploy/project/", "scaleweb@fr-hq-deployment-01:/home/scaleweb/project/"]),
         ])
         mock_func_2.assert_has_calls([
             mock.call(['ssh', 'scaleweb@fr-hq-deployment-01', '-p', '22', 'mkdir', '-p', "/home/scaleweb/project/"], timeout=600),
-            mock.call(['ssh', 'scaleweb@fr-hq-deployment-01', '-p', '22', 'echo', "'master\nabcde\n2015-11-25T23:00:00\n/home/scaleweb/project/'", '>', '/home/scaleweb/project/.git_release'], timeout=600)
+            mock.call(['ssh', 'scaleweb@fr-hq-deployment-01', '-p', '22', 'echo', "'master\nabcde\n2015-11-25 23:00:00.000000\n/home/scaleweb/project/'", '>', '/home/scaleweb/project/.git_release'], timeout=600)
         ], any_order=True)  # TODO: investiguate the extra calls without parameters
 
     @mock.patch('deployment.executils.exec_cmd', autospec=True)

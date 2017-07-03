@@ -124,7 +124,8 @@ export const updateServerStatus = createAction('UPDATE_SERVER_STATUS', (serverId
     branch,
     commit,
     deploymentDate,
-    environmentId
+    environmentId,
+    in_progress: false
 }));
 
 export function loadDiff(repositoryId, fromSha, toSha) {

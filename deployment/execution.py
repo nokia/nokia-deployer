@@ -518,8 +518,8 @@ def parallel_sync(destination_path, sync_options, branch, commit, local_path, ho
     yield "Sync to hosts {}".format(', '.join(host.name for host in hosts))
     if sync_options is None or len(sync_options) == 0:
         sync_options = '-az --delete'
+    sync_options += ' --exclude .git_release'
     destination_path = destination_path + '/' if not destination_path.endswith('/') else destination_path
-
     partial = functools.partial(sync, destination_path, sync_options, branch, commit, local_path)
     try:
         pool = Pool(min(len(hosts), max_parallel_sync))
@@ -538,6 +538,13 @@ def sync(destination_path, sync_options, branch, commit, local_path, host):
     try:
         release_status = get_release_status(host, destination_path)
         log_entries.append(LogEntry("On {}, previous release: {}".format(host.name, release_status.format_commit())))
+
+        # Copy release file (to indicate a deployment is in progress)
+        now = datetime.datetime.utcnow()
+        release_file_contents = gitutils.Release(branch, commit, now, destination_path, in_progress=True).to_string()
+        for e in capture('copy release file', run_cmd_by_ssh, host, ['echo', "'{}'".format(release_file_contents), '>', os.path.join(destination_path, '.git_release')]):
+            log_entries.append(e)
+
         log_entries.append(LogEntry("Copying to {}@{}:{}".format(host.username, host.name, destination_path)))
         for e in capture('mkdir', run_cmd_by_ssh, host, ['mkdir', '-p', destination_path]):
             log_entries.append(e)
@@ -546,9 +553,9 @@ def sync(destination_path, sync_options, branch, commit, local_path, host):
         for e in capture(' '.join(cmd), exec_cmd, cmd):
             log_entries.append(e)
 
-        # Copy release file
+        # Copy release file (deployment finished)
         now = datetime.datetime.utcnow()
-        release_file_contents = gitutils.release_file_contents(branch, commit, now, destination_path)
+        release_file_contents = gitutils.Release(branch, commit, now, destination_path).to_string()
         for e in capture('copy release file', run_cmd_by_ssh, host, ['echo', "'{}'".format(release_file_contents), '>', os.path.join(destination_path, '.git_release')]):
             log_entries.append(e)
     except Exception as e:
@@ -764,7 +771,7 @@ def get_release_status(host, target_path, timeout=4):
     if status != 0:
         return ReleaseStatus.error(stdout + "\n" + stderr)
     try:
-        return ReleaseStatus.release(gitutils.parse_release_file_contents(stdout))
+        return ReleaseStatus.release(gitutils.Release.from_string(stdout))
     except gitutils.InvalidReleaseFile:
         return ReleaseStatus.error("Could not parse the .git_release file")
 
@@ -776,6 +783,10 @@ def concurrent_get_release_status(targets, timeout=4):
     """
     if len(targets) == 0:
         return []
+
+    # workaround for http://bugs.python.org/issue7980
+    import _strptime   # noqa
+
     pool = multiprocessing.dummy.Pool(min(20, len(targets)))
 
     def _inner_get_release_status(target):

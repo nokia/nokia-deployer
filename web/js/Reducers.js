@@ -80,6 +80,7 @@ function serversByIdReducer(state = Map(), action) {
                 Immutable.Map({
                     'branch': releaseStatus.release ? releaseStatus.release.branch: undefined,
                     'commit': releaseStatus.release ? releaseStatus.release.commit: undefined,
+                    'inProgress': releaseStatus.release ? releaseStatus.release.in_progress : undefined,
                     'statusCode': releaseStatus.get_info_successful ? 0 : 1,
                     'status': "SUCCESS",
                     'deploymentDate': releaseStatus.release && releaseStatus.release.deployment_date ? moment.utc(releaseStatus.release.deployment_date).freeze() : null,
@@ -190,7 +191,8 @@ function serverReducer(state = fromJS({status: 'NONE', test: {code: -1}, details
                     commit: action.payload.commit,
                     statusCode: action.payload.statusCode,
                     deploymentDate: action.payload.deploymentDate ? moment.utc(action.payload.deploymentDate).freeze() : null,
-                    message: action.payload.message
+                    message: action.payload.message,
+                    inProgress: action.payload.in_progress
                 })
             );
         }
