@@ -32,18 +32,32 @@ def _path_to_filename(path):
 #### Controlling concurrent access to Git repositories
 # Git needs minimal locking, since most of its internal structures are immutable. Git is mostly "append-only", except when it performs a repack.
 # However, as we are not using bare repos, we need to be careful with operations that affects the working directory.
+#
 # In the context of the deployer, we need only two locks:
 # * if two fetches are done concurrently, one of them may return an error when trying to update a ref (.git/refs/remotes/<origin>/<branch>). Plus we would
 #   be downloading twice the missing objects anyway. Solution: per-repo "fetch lock". If it is already acquired, just skip the fetch.
-# * when a deployment is in progress, we checkout the commit to deploy. The working directory must not be modified during this time, so we use another lock
-#   type: "write lock". This lock is not mutually exclusive with a "fetch lock".
+# * when a deployment is in progress, we checkout the commit to deploy. The working directory must not be modified during this time, so we use another lock type: "write lock".
+#   This lock is not mutually exclusive with a "fetch lock".
+#
+# When a clone is in progress, we need to acquire both locks, because we're not certain of the state of the directory.
+
+@contextlib.contextmanager
+def acquire_repo_lock(lock_type, repo_path, block=True):
+    lock_file_name = {
+        'write': "{}_write",
+        'fetch': "{}_fetch"
+    }
+    if lock_type not in lock_file_name:
+        raise ValueError("Invalid lock type: {} (expected one of {})".format(lock_type, lock_file_name.keys()))
+    mkdir_p(LOCKS_FOLDER)
+    filename = os.path.join(LOCKS_FOLDER,
+                            lock_file_name[lock_type].format(_path_to_filename(repo_path)))
+    with FileLock(filename, block):
+        yield
 
 @contextlib.contextmanager
 def lock_repository_fetch(repo_path, block=True):
-    mkdir_p(LOCKS_FOLDER)
-    filename = os.path.join(LOCKS_FOLDER,
-                            "{}_fetch".format(_path_to_filename(repo_path)))
-    with FileLock(filename, block):
+    with acquire_repo_lock("fetch", repo_path, block):
         repo = _CanFetchLocalRepository(repo_path)
         try:
             yield repo
@@ -53,10 +67,7 @@ def lock_repository_fetch(repo_path, block=True):
 
 @contextlib.contextmanager
 def lock_repository_write(repo_path):
-    mkdir_p(LOCKS_FOLDER)
-    filename = os.path.join(LOCKS_FOLDER,
-                            "{}_write".format(_path_to_filename(repo_path)))
-    with FileLock(filename):
+    with acquire_repo_lock("write", repo_path):
         repo = _WritableLocalRepository(repo_path)
         try:
             yield repo
@@ -74,15 +85,26 @@ def build_repo_url(repo_name, git_server):
     return git_server_url
 
 
-def clone(remote_url, local_path, raise_for_error=False):
-    """Returns True is the clone was actually done, False otherwise"""
-    try:
-        git.Repo.clone_from(remote_url, local_path)
-        return True
-    except git.GitCommandError as e:
-        if e.status == 128 and not raise_for_error:
-            return False
-        raise
+@contextlib.contextmanager
+def lock_repository_clone(remote_url, local_path):
+    with acquire_repo_lock("fetch", local_path), acquire_repo_lock("write", local_path):
+        yield _RepositoryClonator(remote_url, local_path)
+
+
+class _RepositoryClonator(object):
+
+    def __init__(self, remote_url, local_path):
+        self.remote_url = remote_url
+        self.local_path = local_path
+
+    def clone(self, raise_for_error=True):
+        try:
+            git.Repo.clone_from(self.remote_url, self.local_path)
+            return True
+        except git.GitCommandError as e:
+            if e.status == 128 and not raise_for_error:
+                return False
+            raise
 
 
 # Safe operations only, can be used without acquiring a lock first.

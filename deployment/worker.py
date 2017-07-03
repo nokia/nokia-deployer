@@ -117,15 +117,11 @@ class AsyncFetchWorker(object):
                 environment_id, local_repo_directory_name, repository_name, git_server, deploy_branch = job
                 base_repos_path = self.config.get("general", "local_repo_path")
                 path = os.path.join(base_repos_path, local_repo_directory_name)
-                # There is a race condition between two workers here.
-                # If both workers attempt to clone, one of them will fail and this will have no consequences.
-                # Since there are other places where concurrent clones are possible
-                # (deployments can also attempt a clone) and actual cloning is rare day-to-day usage,
-                # we prefer failing here rather than using a lock everywhere clones are attempted.
                 if not os.path.exists(path):
                     logger.info("AsyncFetchWorker: cloning {}".format(path))
                     remote_url = gitutils.build_repo_url(repository_name, git_server)
-                    gitutils.clone(remote_url, path, raise_for_error=True)
+                    with gitutils.lock_repository_clone(remote_url, path) as repo:
+                        repo.clone()
                 else:
                     logger.info("AsyncFetchWorker: fetching {}".format(path))
                     with gitutils.lock_repository_fetch(path) as repo:

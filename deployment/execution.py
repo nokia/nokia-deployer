@@ -468,7 +468,8 @@ def clone_repo(working_directory, repo_name, git_server):
     if os.path.exists(working_directory):
         yield LogEntry("Repository already cloned, skipping.")
         return
-    gitutils.clone(gitutils.build_repo_url(repo_name, git_server), working_directory)
+    with gitutils.lock_repository_clone(gitutils.build_repo_url(repo_name, git_server), working_directory) as repo:
+        repo.clone()
 
 
 def update_repo(local_repo_path, commit, write_repo_lock):

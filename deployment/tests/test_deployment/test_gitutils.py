@@ -4,6 +4,7 @@ import unittest
 import tempfile
 import shutil
 import os
+from datetime import datetime
 
 import git
 
@@ -22,7 +23,8 @@ class TestGitUtils(unittest.TestCase):
 
     def _clone_repo(self):
         clone_path = tempfile.mkdtemp(dir=self.base_path, prefix="clone")
-        gitutils.clone(self.base_repo_path, clone_path)
+        with gitutils.lock_repository_clone(self.base_repo_path, clone_path) as repo:
+            repo.clone()
         return clone_path
 
     def _commit_and_push_to_base_repo(self):
@@ -48,8 +50,9 @@ class TestGitUtils(unittest.TestCase):
 
     def test_clone_repo(self):
         clone_path = tempfile.mkdtemp(dir=self.base_path)
-        self.assertTrue(gitutils.clone(self.base_repo_path, clone_path))
-        self.assertFalse(gitutils.clone(self.base_repo_path, clone_path))
+        with gitutils.lock_repository_clone(self.base_repo_path, clone_path) as repo:
+            self.assertTrue(repo.clone())
+            self.assertFalse(repo.clone(raise_for_error=False))
         # Will raise InvalidGitRepositoryError if the clone did not succeed
         gitutils.LocalRepository(clone_path)
 
