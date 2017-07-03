@@ -123,7 +123,7 @@ class LocalRepository(object):
         if self._invalidated:
             raise ValueError('You can no longer perform this operation with this object.')
 
-    # Converts a coommit object from GitPython to a simpler structure (see gitutils.Commit),
+    # Converts a commit object from GitPython to a simpler structure (see gitutils.Commit),
     # so we don't expose the GitPython library to the rest of the code
     def _format_commit(self, entry):
         try:
