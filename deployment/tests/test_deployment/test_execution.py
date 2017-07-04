@@ -311,7 +311,7 @@ class TestSteps(unittest.TestCase):
         host = executils.Host("fr-hq-deployment-01", "scaleweb", 22)
         self._unwind(execution.parallel_sync("/home/scaleweb/project", "-cr --delete-after", "master", "abcde", "/home/deploy/project/", [host], 1))
         mock_func.assert_has_calls([
-            mock.call(["rsync", "-e", "ssh -p 22", "--exclude=.git", "-cr", "--delete-after", "--exclude", ".git_release", "/home/deploy/project/", "scaleweb@fr-hq-deployment-01:/home/scaleweb/project/"]),
+            mock.call(["rsync", "-e", "ssh -p 22", "--exclude=.git", "-cr", "--delete-after", "--exclude=.git_release", "/home/deploy/project/", "scaleweb@fr-hq-deployment-01:/home/scaleweb/project/"]),
         ])
         mock_func_2.assert_has_calls([
             mock.call(['ssh', 'scaleweb@fr-hq-deployment-01', '-p', '22', 'mkdir', '-p', "/home/scaleweb/project/"], timeout=600),

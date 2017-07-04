@@ -518,7 +518,7 @@ def parallel_sync(destination_path, sync_options, branch, commit, local_path, ho
     yield "Sync to hosts {}".format(', '.join(host.name for host in hosts))
     if sync_options is None or len(sync_options) == 0:
         sync_options = '-az --delete'
-    sync_options += ' --exclude .git_release'
+    sync_options += ' --exclude=.git_release'
     destination_path = destination_path + '/' if not destination_path.endswith('/') else destination_path
     partial = functools.partial(sync, destination_path, sync_options, branch, commit, local_path)
     try:
