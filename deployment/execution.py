@@ -536,6 +536,9 @@ def parallel_sync(destination_path, sync_options, branch, commit, local_path, ho
 def sync(destination_path, sync_options, branch, commit, local_path, host):
     log_entries = []
     try:
+        for e in capture('mkdir', run_cmd_by_ssh, host, ['mkdir', '-p', destination_path]):
+            log_entries.append(e)
+
         release_status = get_release_status(host, destination_path)
         log_entries.append(LogEntry("On {}, previous release: {}".format(host.name, release_status.format_commit())))
 
@@ -546,8 +549,6 @@ def sync(destination_path, sync_options, branch, commit, local_path, host):
             log_entries.append(e)
 
         log_entries.append(LogEntry("Copying to {}@{}:{}".format(host.username, host.name, destination_path)))
-        for e in capture('mkdir', run_cmd_by_ssh, host, ['mkdir', '-p', destination_path]):
-            log_entries.append(e)
         destination = "{}@{}:{}".format(host.username, host.name, destination_path)
         cmd = ['rsync', '-e', 'ssh -p {}'.format(host.port), '--exclude=.git'] + sync_options.split(" ") + [local_path, destination]
         for e in capture(' '.join(cmd), exec_cmd, cmd):
