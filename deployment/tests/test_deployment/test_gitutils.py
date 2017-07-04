@@ -135,7 +135,7 @@ class TestGitUtils(unittest.TestCase):
     def test_release(self):
         contents = """master
 215254b4d3a264f4d3eec7e881aa735448910586
-2017-06-30 14:23:21.000000
+2017-06-30T14:23:21.000000
 /some/path"""
         release = gitutils.Release.from_string(contents)
         self.assertEquals(contents, release.to_string())

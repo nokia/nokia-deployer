@@ -213,7 +213,7 @@ class InvalidReleaseFile(Exception):
 
 class Release(object):
 
-    DATE_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
+    DATE_FORMAT = "%Y-%m-%dT%H:%M:%S.%f"
 
     def __init__(self, branch, commit, deployment_date, destination_path, in_progress=False):
         self.branch = branch

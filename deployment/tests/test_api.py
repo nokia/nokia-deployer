@@ -17,7 +17,7 @@ from deployment.integrationexample.integration import DummyAuthentificator
 def _mocked_get_git_release(host, cmd, timeout):
     message = """prod
 ee31430cc3b28596857d50e67c117a5ec8825fec
-2016-02-16 16:44:32.238700
+2016-02-16T16:44:32.238700
 /home/scaleweb/websites/backend/
     """
     return (0, message, None)

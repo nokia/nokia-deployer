@@ -315,7 +315,7 @@ class TestSteps(unittest.TestCase):
         ])
         mock_func_2.assert_has_calls([
             mock.call(['ssh', 'scaleweb@fr-hq-deployment-01', '-p', '22', 'mkdir', '-p', "/home/scaleweb/project/"], timeout=600),
-            mock.call(['ssh', 'scaleweb@fr-hq-deployment-01', '-p', '22', 'echo', "'master\nabcde\n2015-11-25 23:00:00.000000\n/home/scaleweb/project/'", '>', '/home/scaleweb/project/.git_release'], timeout=600)
+            mock.call(['ssh', 'scaleweb@fr-hq-deployment-01', '-p', '22', 'echo', "'master\nabcde\n2015-11-25T23:00:00.000000\n/home/scaleweb/project/'", '>', '/home/scaleweb/project/.git_release'], timeout=600)
         ], any_order=True)  # TODO: investiguate the extra calls without parameters
 
     @mock.patch('deployment.executils.exec_cmd', autospec=True)
