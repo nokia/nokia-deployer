@@ -214,7 +214,7 @@ class Environment(Base):
         else:
             short_commit = commit[0:8]
             release_date = datetime.datetime.utcnow().strftime("%Y%m%d")
-            releases_folder = "{}_releases".format(self.repository_name)
+            releases_folder = "{}_releases".format(self.repository.name)
             return os.path.join(
                 self.remote_repo_path(),
                 "{}/{}_{}_{}".format(releases_folder, release_date, branch, short_commit)
