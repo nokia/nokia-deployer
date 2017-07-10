@@ -144,16 +144,20 @@ def requires_logged(decorated):
 @post('/api/auth/wssession')
 def auth_session(db):
     if 'sessionid' not in request.json:
+        logger.info("No sessionid in request")
         abort(400)
     sessionid = request.json['sessionid']
     if sessionid is None:
+        logger.info("sessionid is empty")
         abort(400)
     # Check that this session is valid
     try:
         user = default_app().config["deployer.authentificator"].get_user_by_sessionid(sessionid, db)
     except InvalidSession:
+        logger.info("Invalid session")
         abort(400)
     except NoMatchingUser:
+        logger.info("No matching user")
         abort(403)
     return issue_token(user, db)
 
@@ -311,9 +315,9 @@ def get_commits_by_env(environment_id, db):
 @route('/api/status')
 def status():
     health = default_app().config['health'].get_status()
-    if health.degraded:
+    if health['degraded']:
         # using a non 200 code makes monitoring easier, no need to parse the response body
-        abort(500, "this deployer instance is not healthy: {}".format(health.reason))
+        abort(500, "this deployer instance is not healthy: {}".format(health['errors']))
     return json.dumps({'message': 'Deployer API is up and running'})
 
 

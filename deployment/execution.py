@@ -739,6 +739,12 @@ class ReleaseStatus(object):
         self._release = release
         self._error = error
 
+    def get_error(self):
+        return self._error
+
+    def get_release(self):
+        return self._release
+
     def to_dict(self, environment_id, server_id):
         id = "{}_{}".format(environment_id, server_id)
         if self._error:

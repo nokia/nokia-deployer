@@ -232,3 +232,4 @@ class DeployerWorker(object):
     def perform(self, deploy_job):
         deployment = execution.Deployment(deploy_job.deploy_id, self.general_config, self.notifier, self.artifact_detector)
         deployment.execute()
+

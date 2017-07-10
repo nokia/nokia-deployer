@@ -2,7 +2,6 @@
 import os
 import threading
 import ConfigParser
-from collections import namedtuple
 import time
 from logging import getLogger
 import importlib
@@ -14,6 +13,8 @@ from .worker import DeployerWorker, AsyncFetchWorker
 from . import execution, mail, notification, websocket, database
 from .log import configure_logging
 from .cleaner import CleanerWorker
+from .instancehealth import InstanceHealth
+from .checkreleases import CheckReleasesWorker
 
 
 logger = getLogger(__name__)
@@ -102,6 +103,11 @@ class WorkerSupervisor(object):
         api_worker = api.ApiWorker(self.config_path, config, self.notifier, websocket_notifier, provider.authentificator(), self._health)
         workers.append(api_worker)
 
+        frequency = int(config.get("general", "check_releases_frequency", -1))
+        if frequency > 0:
+            check_releases_workers = CheckReleasesWorker(frequency, self._health)
+            workers.append(check_releases_workers)
+
         async_fetch_workers = [
             AsyncFetchWorker(
                 config,
@@ -166,35 +172,9 @@ class WorkerSupervisor(object):
             with self.lock:
                 for t, _ in self.threads:
                     if not t.isAlive():
-                        self._health.set_degraded("a deployer thread died (see logs for details)")
+                        self._health.add_degraded("workers", "a deployer thread died (see logs for details)")
                         logger.error(
                             "The thread {} (tid {}) died. You should examine the logs to find out "
                             "what went wrong, and probably restart the deployer."
                             .format(t.name, t.ident))
             time.sleep(20)
-
-
-Health = namedtuple('Health', ['degraded', 'reason'])
-
-
-class InstanceHealth(object):
-    """Thread safe object to communicate between the worker thread and the API thread."""
-
-    def __init__(self):
-        self._degraded = False
-        self._reason = None
-        self._lock = threading.Lock()
-
-    def set_degraded(self, reason):
-        with self._lock:
-            self._degraded = True
-            self._reason = reason
-
-    def set_ok(self):
-        with self._lock:
-            self._degraded = False
-            self._reason = None
-
-    def get_status(self):
-        with self._lock:
-            return Health(self._degraded, self._reason)
