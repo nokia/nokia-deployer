@@ -2,7 +2,6 @@
 import os
 import threading
 import ConfigParser
-from collections import namedtuple
 import time
 from logging import getLogger
 import importlib
@@ -104,11 +103,10 @@ class WorkerSupervisor(object):
         api_worker = api.ApiWorker(self.config_path, config, self.notifier, websocket_notifier, provider.authentificator(), self._health)
         workers.append(api_worker)
 
-        if config.has_option("general", "check_releases_frequency"):
-            frequency = config.getint("general", "check_releases_frequency")
-            if frequency > 0:
-                check_releases_workers = CheckReleasesWorker(frequency, self._health)
-                workers.append(check_releases_workers)
+        frequency = int(config.get("general", "check_releases_frequency", -1))
+        if frequency > 0:
+            check_releases_workers = CheckReleasesWorker(frequency, self._health)
+            workers.append(check_releases_workers)
 
         async_fetch_workers = [
             AsyncFetchWorker(

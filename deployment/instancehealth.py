@@ -1,6 +1,4 @@
 import threading
-from collections import namedtuple
-
 
 
 class InstanceHealth(object):

@@ -1,10 +1,7 @@
 from logging import getLogger
 from datetime import timedelta, datetime
 from threading import Condition
-from itertools import repeat
-import json
 
-from .instancehealth import InstanceHealth
 from . import database, samodels as m
 from . import execution, executils
 
@@ -15,37 +12,42 @@ class CheckReleasesWorker(object):
     """Check releases from every servers and update health info."""
 
     def __init__(self, frequency, health):
-        logger.info("CheckReleases worker init. It will run every %d seconds" % frequency)
+        logger.info("CheckReleases worker init. It will run every {} seconds".format(frequency))
         self._running = True
-        self._frequency = frequency
         self._health = health
-        self.wakeup_period = timedelta(seconds=self._frequency)
+        self._min_minutes = 30
+        self.wakeup_period = timedelta(seconds=frequency)
         self.condition = Condition()
 
     def start(self):
-        logger.info("CheckReleases worker wakeup.")
         self._health.set_ok("releases")
         while self._running:
+            logger.info("CheckReleases worker wakeup.")
             try:
                 with database.session_scope() as session:
                     repositories = session.query(m.Repository).all()
                     for repo in repositories:
-                        for env in repo.environments:
-                            releases = set()
-                            for srv in env.servers:
-                                release = execution.get_release_status(executils.Host.from_server(srv, env.remote_user), env.target_path)
-                                diff_minutes = (datetime.now() - release._release.deployment_date).seconds * 60
-                                branch, commit = release._release.branch, release._release.commit
-                                if diff_minutes < 30:
-                                    logger.info("ignore diff, commit was deployed less than [%d] minutes" % diff_minutes)
-                                else:
-                                    logger.info("repository:[%s] env:[%s] release:[%s:%s/%s] diff_minutes:[%d]" % (repo.name, env.name, str(srv.id), branch, commit, diff_minutes))
-                                    releases.add(branch+":"+commit)
-                            logger.info("repository:[%s] env:[%s] releases_count:[%d]" % (repo.name, env.name, len(releases)))
-                            if len(releases) > 1:
-                                self._health.add_degraded("releases", "at least one server is out of sync for repo:[%s] env:[%s]" % (repo.name, env.name))
-                            break
-                        break
+                        try:
+                            for env in repo.environments:
+                                releases = set()
+                                for srv in env.servers:
+                                    release_status = execution.get_release_status(executils.Host.from_server(srv, env.remote_user), env.target_path)
+                                    if release_status.get_error():
+                                        error = "no release found on server:[{}] repo:[{}] env:[{}]".format(srv.name, repo.name, env.name)
+                                        logger.info(error)
+                                        self._health.add_degraded("releases", error)
+                                        continue
+                                    age = datetime.utcnow() - release_status.get_release().deployment_date
+                                    if age < timedelta(minutes=self._min_minutes):
+                                        logger.debug("ignore diff, commit was deployed less than {} minutes:[{}]".format(self._min_minutes, age))
+                                    else:
+                                        logger.debug("repository:[{}] env:[{}] release:[{}:{}] diff:[{}]".format(repo.name, env.name, str(srv.id), release_status.get_release().commit, age))
+                                        releases.add(release_status.get_release().commit)
+                                logger.info("repository:[{}] env:[{}] releases_count:[{}]".format(repo.name, env.name, len(releases)))
+                                if len(releases) > 1:
+                                    self._health.add_degraded("releases", "at least one server is out of sync for repo:[{}] env:[{}]".format(repo.name, env.name))
+                        except Exception:
+                            logger.exception("Unexpected error when trying to retrieve releases for repo:[{}]".format(repo.name))
             except Exception:
                 logger.exception("Unexpected error when trying to retrieve releases")
             self.condition.acquire()
