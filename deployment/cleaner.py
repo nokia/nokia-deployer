@@ -26,14 +26,18 @@ class CleanerWorker():
     def start(self):
         while self.running:
             try:
+                logger.info("Cleaner worker wakeup.")
                 self._cleanup()
+                logger.info("Cleaner worker going to sleep. Next wakeup in: {}".format(self.wakeup_period))
             except Exception:
                 logger.exception("Unexpected error when trying to clean up on-disk directories")
             self.condition.acquire()
             self.condition.wait(self.wakeup_period.total_seconds())
 
     def _cleanup(self):
-        logger.info("Cleaner worker wakeup.")
+        if not os.path.exists(self.base_repos_path):
+            logger.info("Base repo path {} does not exist yet, nothing to do.".format(self.base_repos_path))
+            return
         now = datetime.utcnow()
         with session_scope() as session:
             deletion_candidates = set(os.listdir(self.base_repos_path))
@@ -53,7 +57,6 @@ class CleanerWorker():
                     logger.info(
                         "Deleted unused directory {}".format(path)
                     )
-        logger.info("Cleaner worker going to sleep. Next wakeup in: {}".format(self.wakeup_period))
 
     def stop(self):
         self.running = False
