@@ -214,6 +214,7 @@ class InvalidReleaseFile(Exception):
 class Release(object):
 
     DATE_FORMAT = "%Y-%m-%dT%H:%M:%S.%f"
+    DATE_FORMAT_LEGACY = "%Y-%m-%d %H:%M:%S.%f"
 
     def __init__(self, branch, commit, deployment_date, destination_path, in_progress=False):
         self.branch = branch
@@ -241,7 +242,10 @@ class Release(object):
         else:
             in_progress = False
         try:
-            date = datetime.datetime.strptime(outs[2], klass.DATE_FORMAT)
+            try:
+                date = datetime.datetime.strptime(outs[2], klass.DATE_FORMAT)
+            except:
+                date = datetime.datetime.strptime(outs[2], klass.DATE_FORMAT_LEGACY)
         except ValueError as e:
             raise InvalidReleaseFile(str(e))
         return klass(branch=outs[0], commit=outs[1], deployment_date=date,
