@@ -233,8 +233,9 @@ class Release(object):
     @classmethod
     def from_string(klass, contents):
         outs = contents.strip().split("\n")
-        if len(outs) <= 3:
+        if len(outs) < 3:
             raise InvalidReleaseFile()
+        destination_path = outs[3] if len(outs) >= 4 else None
         if len(outs) >= 5:
             in_progress = outs[4] == "deployment in progress"
         else:
@@ -244,7 +245,7 @@ class Release(object):
         except ValueError as e:
             raise InvalidReleaseFile(str(e))
         return klass(branch=outs[0], commit=outs[1], deployment_date=date,
-                     destination_path=outs[3], in_progress=in_progress)
+                     destination_path=destination_path, in_progress=in_progress)
 
     def to_string(self):
         out = "\n".join([self.branch, self.commit,
