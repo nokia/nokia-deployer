@@ -106,7 +106,8 @@ class WorkerSupervisor(object):
         if config.has_option("general", "check_releases_frequency"):
             frequency = config.getint("general", "check_releases_frequency")
             if frequency > 0:
-                check_releases_workers = CheckReleasesWorker(frequency, self._health)
+                ignore_envs = config.get("general", "check_releases_ignore_environments").split(",") if config.has_option("general", "check_releases_ignore_environments") else []
+                check_releases_workers = CheckReleasesWorker(frequency, ignore_envs, self._health)
                 workers.append(check_releases_workers)
 
         async_fetch_workers = [

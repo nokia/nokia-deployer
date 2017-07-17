@@ -11,10 +11,11 @@ logger = getLogger(__name__)
 class CheckReleasesWorker(object):
     """Check releases from every servers and update health info."""
 
-    def __init__(self, frequency, health):
-        logger.info("CheckReleases worker init. It will run every {} seconds".format(frequency))
+    def __init__(self, frequency, ignore_envs, health):
+        logger.info("CheckReleases worker init. It will run every {} seconds, ignoring environments: {}".format(frequency, ignore_envs))
         self._running = True
         self._health = health
+        self._ignore_envs = ignore_envs
         self._min_minutes = 30
         self.wakeup_period = timedelta(seconds=frequency)
         self.condition = Condition()
@@ -29,21 +30,24 @@ class CheckReleasesWorker(object):
                     for repo in repositories:
                         try:
                             for env in repo.environments:
+                                if env.name in self._ignore_envs:
+                                    logger.debug("Ignore environment {}".format(env.name))
+                                    continue
                                 releases = set()
                                 for srv in env.servers:
                                     release_status = execution.get_release_status(executils.Host.from_server(srv, env.remote_user), env.target_path)
                                     if release_status.get_error():
-                                        error = "no release found on server:[{}] repo:[{}] env:[{}]".format(srv.name, repo.name, env.name)
+                                        error = "No release found on server:[{}] repo:[{}] env:[{}]".format(srv.name, repo.name, env.name)
                                         logger.info(error)
                                         self._health.add_degraded("releases", error)
                                         continue
                                     age = datetime.utcnow() - release_status.get_release().deployment_date
                                     if age < timedelta(minutes=self._min_minutes):
-                                        logger.debug("ignore diff, commit was deployed less than {} minutes:[{}]".format(self._min_minutes, age))
+                                        logger.debug("Ignore diff, commit was deployed less than {} minutes:[{}]".format(self._min_minutes, age))
                                     else:
-                                        logger.debug("repository:[{}] env:[{}] release:[{}:{}] diff:[{}]".format(repo.name, env.name, str(srv.id), release_status.get_release().commit, age))
+                                        logger.debug("Repository:[{}] env:[{}] release:[{}:{}] diff:[{}]".format(repo.name, env.name, str(srv.id), release_status.get_release().commit, age))
                                         releases.add(release_status.get_release().commit)
-                                logger.info("repository:[{}] env:[{}] releases_count:[{}]".format(repo.name, env.name, len(releases)))
+                                logger.info("Repository:[{}] env:[{}] releases_count:[{}]".format(repo.name, env.name, len(releases)))
                                 if len(releases) > 1:
                                     self._health.add_degraded("releases", "at least one server is out of sync for repo:[{}] env:[{}]".format(repo.name, env.name))
                         except Exception:
