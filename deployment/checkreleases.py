@@ -22,7 +22,7 @@ class CheckReleasesWorker(object):
 
     def start(self):
         while self._running:
-            logger.info("CheckReleases worker wakeup.")
+            logger.info("CheckReleases worker wakeup")
             self._health.set_ok("releases")
             try:
                 with database.session_scope() as session:
@@ -54,11 +54,12 @@ class CheckReleasesWorker(object):
                             logger.exception("Unexpected error when trying to retrieve releases for repo:[{}]".format(repo.name))
             except Exception:
                 logger.exception("Unexpected error when trying to retrieve releases")
+            logger.info("CheckReleases worker done")
             self.condition.acquire()
             self.condition.wait(self.wakeup_period.total_seconds())
 
     def stop(self):
-        logger.info("CheckReleases worker stop.")
+        logger.info("CheckReleases worker stop")
         if self._running:
             self.condition.acquire()
             self.condition.notifyAll()
