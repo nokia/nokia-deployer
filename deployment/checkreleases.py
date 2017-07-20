@@ -21,9 +21,9 @@ class CheckReleasesWorker(object):
         self.condition = Condition()
 
     def start(self):
-        self._health.set_ok("releases")
         while self._running:
             logger.info("CheckReleases worker wakeup.")
+            self._health.set_ok("releases")
             try:
                 with database.session_scope() as session:
                     repositories = session.query(m.Repository).all()
