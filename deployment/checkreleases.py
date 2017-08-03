@@ -21,6 +21,7 @@ class CheckReleasesWorker(object):
         self.condition = Condition()
 
     def start(self):
+        get_release_status_timeout = 10
         while self._running:
             logger.info("CheckReleases worker wakeup")
             self._health.set_ok("releases")
@@ -35,7 +36,7 @@ class CheckReleasesWorker(object):
                                     continue
                                 releases = set()
                                 for srv in env.servers:
-                                    release_status = execution.get_release_status(executils.Host.from_server(srv, env.remote_user), env.target_path)
+                                    release_status = execution.get_release_status(executils.Host.from_server(srv, env.remote_user), env.target_path, get_release_status_timeout)
                                     if release_status.get_error():
                                         error = "No release found on server:[{}] repo:[{}] env:[{}]".format(srv.name, repo.name, env.name)
                                         logger.info(error)
