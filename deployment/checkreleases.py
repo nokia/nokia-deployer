@@ -36,10 +36,16 @@ class CheckReleasesWorker(object):
                                     continue
                                 releases = set()
                                 for srv in env.servers:
+                                    if not srv.activated:
+                                        logger.debug("Server:[{}] deactivated, do not check releases".format(srv.name))
+                                        continue
                                     release_status = execution.get_release_status(executils.Host.from_server(srv, env.remote_user), env.target_path, get_release_status_timeout)
                                     if release_status.get_error():
+                                        if release_status.get_error_code() == 255:
+                                            logger.debug("Server:[{}] error executing ssh command, ignore releases check".format(srv.name))
+                                            continue
                                         error = "No release found on server:[{}] repo:[{}] env:[{}]".format(srv.name, repo.name, env.name)
-                                        logger.info(error)
+                                        logger.error(error)
                                         self._health.add_degraded("releases", error)
                                         continue
                                     age = datetime.utcnow() - release_status.get_release().deployment_date

@@ -727,17 +727,21 @@ def _get_git_release(host, target_path, timeout=4):
 class ReleaseStatus(object):
 
     @classmethod
-    def error(klass, error):
-        return klass(error=error)
+    def error(klass, error, error_code):
+        return klass(error=error, error_code=error_code)
 
     @classmethod
     def release(klass, release):
         return klass(release=release)
 
-    def __init__(self, release=None, error=None):
+    def __init__(self, release=None, error=None, error_code=None):
         assert release or error
         self._release = release
         self._error = error
+        self._error_code = error_code
+
+    def get_error_code(self):
+        return self._error_code
 
     def get_error(self):
         return self._error
@@ -776,11 +780,11 @@ class ReleaseStatus(object):
 def get_release_status(host, target_path, timeout=4):
     (status, stdout, stderr) = _get_git_release(host, target_path, timeout)
     if status != 0:
-        return ReleaseStatus.error(stdout + "\n" + stderr)
+        return ReleaseStatus.error(stdout + "\n" + stderr, status)
     try:
         return ReleaseStatus.release(gitutils.Release.from_string(stdout))
     except gitutils.InvalidReleaseFile:
-        return ReleaseStatus.error("Could not parse the .git_release file")
+        return ReleaseStatus.error("Could not parse the .git_release file", -1)
 
 
 def concurrent_get_release_status(targets, timeout=4):
