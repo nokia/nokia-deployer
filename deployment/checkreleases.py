@@ -1,6 +1,7 @@
 from logging import getLogger
 from datetime import timedelta, datetime
 from threading import Condition
+import time
 
 from . import database, samodels as m
 from . import execution, executils
@@ -44,10 +45,14 @@ class CheckReleasesWorker(object):
                                         if release_status.get_error_code() == 255:
                                             logger.debug("Server:[{}] error executing ssh command, ignore releases check".format(srv.name))
                                             continue
-                                        error = "No release found on server:[{}] repo:[{}] env:[{}]".format(srv.name, repo.name, env.name)
-                                        logger.error(error)
-                                        self._health.add_degraded("releases", error)
-                                        continue
+                                        # retry after 30 seconds
+                                        time.sleep(30)
+                                        release_status = execution.get_release_status(executils.Host.from_server(srv, env.remote_user), env.target_path, get_release_status_timeout)
+                                        if release_status.get_error():
+                                            error = "No release found on server:[{}] repo:[{}] env:[{}]".format(srv.name, repo.name, env.name)
+                                            logger.error(error)
+                                            self._health.add_degraded("releases", error)
+                                            continue
                                     age = datetime.utcnow() - release_status.get_release().deployment_date
                                     if age < timedelta(minutes=self._min_minutes):
                                         logger.debug("Ignore diff, commit was deployed less than {} minutes:[{}]".format(self._min_minutes, age))
