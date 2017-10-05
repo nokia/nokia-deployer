@@ -172,7 +172,6 @@ class Deployment(object):
         self.artifact_detector = artifact_detector
 
         self.log = PrefixedLoggerAdapter(logger, "[deploy {}]".format(deploy_id))
-        self.screenshot_files = None
         self.artifact = None
         self.view = None
         self.step_results = []
@@ -282,17 +281,7 @@ class Deployment(object):
             new_version_clusters.append(cluster)
             run_step(self, enable_clusters, [cluster], haproxy_auth)
 
-    def _take_screenshot(self, local_repo_path):
-        deploy_conf = run_step(self, load_repo_configuration_file, local_repo_path)
-        environment = self.view.environment
-        screenshot_files = None
-        if 'url' in deploy_conf and environment.name in deploy_conf['url']:
-            screenshot_files = run_step(self, screenshot, deploy_conf['url'][environment.name],
-                                        environment.repository.name, environment.name)
-        return screenshot_files
-
     def execute(self):
-        screenshots = []
         with database.session_scope() as session:
             try:
                 self.view = session.query(m.DeploymentView).get(self.deploy_id)
@@ -317,7 +306,6 @@ class Deployment(object):
                         self._copy_to_remotes(cluster, mail_sender, mail_test_report_to)
 
                 self._update_status(DeploymentStatus.POST_DEPLOY, session)
-                screenshots = self._take_screenshot(local_repo_path)
                 self.log.info("END deploy")
             except Exception:
                 # Do not log the stack trace here, as we are raising the exception again, it will be logged
@@ -332,7 +320,7 @@ class Deployment(object):
             finally:
                 if self.artifact is not None:
                     self.artifact.cleanup()
-                self.notifier.dispatch(Notification.deployment_end(self.view, screenshots))
+                self.notifier.dispatch(Notification.deployment_end(self.view))
                 session.commit()
 
 
@@ -690,29 +678,6 @@ def check_servers_availability(session, current_deploy_id, servers, environment_
             yield False
             return
     yield True
-
-
-def screenshot(url, repository_name, environment_name):
-    yield "Take a screenshot of {}".format(url)
-    fn = "/tmp/{}_{}.png".format(repository_name, environment_name)
-    for e in capture("takepng", exec_cmd, ['/usr/local/bin/phantomjs/bin/phantomjs', '--ssl-protocol=any', '/usr/local/bin/phantomjs/bin/takepng.js', url, fn]):
-        yield e
-    files = [fn]
-    yield files
-
-
-def load_repo_configuration_file(local_repo_path):
-    yield "Load deploy.json"
-    filename = os.path.join(local_repo_path, 'deploy.json')
-
-    if not os.path.exists(filename):
-        yield LogEntry("No 'deploy.json' file found in the repository, skipping.")
-        yield {}
-        return
-
-    with open(filename) as f:
-        opt = json.loads(f.read())
-        yield opt
 
 
 #########

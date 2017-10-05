@@ -37,14 +37,11 @@ class Notification(object):
         })
 
     @classmethod
-    def deployment_end(klass, deployment_view, screenshot_files=None):
-        if screenshot_files is None:
-            screenshot_files = []
+    def deployment_end(klass, deployment_view):
         return klass('deployment.end', {
             'environment_id': deployment_view.environment_id,
             'deployment': deployment_view,
-            'deploy_id': deployment_view.id,
-            'screenshot_files': screenshot_files
+            'deploy_id': deployment_view.id
         })
 
     @classmethod
@@ -201,13 +198,12 @@ class MailNotifier(object):
         if event.evt_type != "deployment.end":
             return
         deployment = event.payload["deployment"]
-        screenshot_files = event.payload["screenshot_files"]
-        self.send_deployment_mail(deployment, screenshot_files)
+        self.send_deployment_mail(deployment)
 
-    def send_deployment_mail(self, deployment, screenshot_files):
+    def send_deployment_mail(self, deployment):
         receivers = set(deployment.environment.repository.notify_owners_mails + self.always_notify)
         message, subject = self._message_with_configuration(deployment)
-        mail.send_mail(self.sender, receivers, subject, message, screenshot_files)
+        mail.send_mail(self.sender, receivers, subject, message)
 
     def _message_with_configuration(self, deployment):
         template = """
