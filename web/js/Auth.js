@@ -84,10 +84,6 @@ const Auth = function() {
         }
         this._emitStartLoginFlow();
         this._loginInProgress = true;
-        const sessionid = Cookies.get(process.env.SESSIONID_COOKIE);
-        if(!sessionid) {
-            this._redirectToAccount();
-        }
         const deployerToken = Cookies.get('deployer-session');
         if(deployerToken) {
             this._validateSession().then(
@@ -123,9 +119,11 @@ const Auth = function() {
     this._createSession = (cb) => {
         const that = this;
         fetch(this.daemonUrl + '/api/auth/wssession', {
-            body: JSON.stringify({sessionid: Cookies.get(process.env.SESSIONID_COOKIE)}),
+            // pass the sessionid using cookies instead (HttpOnly cookies support)
+            body: JSON.stringify({}),
             method: 'POST',
-            headers: this._makeHeaders()
+            headers: this._makeHeaders(),
+            credentials: 'same-origin'
         }).then(response => {
             if(response.ok) {
                 response.json().then(body => {

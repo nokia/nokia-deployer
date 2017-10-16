@@ -1,7 +1,6 @@
 # Copyright (C) 2016 Nokia Corporation and/or its subsidiary(-ies).
 """Dummy module describing the interfaces to implement
 to integrate the deployer to a specific environment.
-You can use it without modifications if you only want to provide password-based authentification.
 
 Integration capabilities are currently limited and somewhat inflexible,
 so the interfaces here should not be considered stable. We will try to
@@ -80,6 +79,9 @@ class DummyAuthentificator(object):
         1) the client provides a sessionid to /api/auth/wssession
 
         curl -X POST -d '{"sessionid": "my-id"}' http://deployer.example.com/api/auth/wssession
+
+        This sessionid can also be passed in the request cookies
+        (see the integration.sessionid_cookie configuratino parameter).
 
         2) you make sure this sessionid is valid, and matches an accountid in the deployer DB.
         This may be handed to an external service.

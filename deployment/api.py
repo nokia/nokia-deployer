@@ -143,12 +143,13 @@ def requires_logged(decorated):
 
 @post('/api/auth/wssession')
 def auth_session(db):
-    if 'sessionid' not in request.json:
-        logger.info("No sessionid in request")
-        abort(400)
-    sessionid = request.json['sessionid']
+    sessionid_cookie_name = default_app().config["integration.sessionid_cookie"]
+    # may be None if the cookie is not set - we'll fallback to the sessionid passed in the body if required
+    sessionid = request.get_cookie(sessionid_cookie_name)
+    if 'sessionid' in request.json:
+        sessionid = request.json['sessionid']
     if sessionid is None:
-        logger.info("sessionid is empty")
+        logger.info("no sessionid was provided")
         abort(400)
     # Check that this session is valid
     try:

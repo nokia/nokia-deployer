@@ -132,40 +132,50 @@ You need to setup passwordless SSH for this user for each target server.
 
 ### Access control
 
-#### Authentification
+#### Authentication
 
-The deployer can support two authentification methods:
-* username + token
+The deployer can support two authentication methods:
+* username + password
 * sessionid
 
+There are no fundamental differences between the two. The sessionid method is intended to be used with an
+external authentication method, while the username + password method is easier to use if you don't want
+to implement integration with another service.
+
 Out-of-the box (using the `deployment.integration.DummyIntegration` module), the deployer provides
-authentification by username + password (we call this 'token-based' authentification, the token being the password).
+authentification by username + password (sometimes referred to 'token-based' authentification, the token being the password).
 Note that this is not supported by the web UI ; to use the web UI, you will need to write a sessionid
-authentification plugin.
+authentication plugin.
 
 See the source for `deployment/integration/DummyIntegration.py` for details.
 
 In its database, the deployer stores two identifying fields for each user:
 * accountid (this is a user ID, but called accountid because of historical reasons)
-* token (hashed by default)
+* password (hashed by default, and can be null if you don't want to use this authentication method)
 
 Prior to making requests, a client must get a session token from the deployer, using one of the two
-methods above. The session token must then be provided under the "X-Session-ID" HTTP header on each request, and is
+methods above. The session token must then be provided under the "X-Session-Token" HTTP header on each HTTP request, and is
 only valid for a couple of minutes.
 
 The web UI only implements the sessionid authentification workflow (at least for now).
 
 ##### sessionid authentification
 
-With this method, you need to exchange a client-provided sessionid with an accountid (as stored in the deployer database).
-This can be done by talking to an external service.
+This method relies on a "sessionid" provided by an external authentication service.
+This sessionid is exchanded using a HTTP POST request to `/api/auth/wssession` against a deployer token.
 
-The client does that by submitting a client token, called a sessionid (which is an arbitrary string), to the deployer.
-The deployer defers to the specified integration plugin to validate and exchange this client token against an
-account ID. If this account ID is found in the deployer database, then the deployer generates a session token
-valid for a couple of minutes, and hands it to the client.
+To use this method, you need to write a small Python plugin to match this sessionid against one of the accountid
+stored in the deployer database.
+This plugin will need to talk to the external authentication service to validate the sessionid and retrieve the corresponding accountid.
 
-If defined, the 'default' user permissions are applied for all unauthenticated requests.
+Once the accountid is retrieved, the deployer will issue a short-lived session token to the client. The client will then
+provide this token in each request (under the `X-Auth-Token` header) to authenticate its requests.
+
+The web UI only supports this authentication method. During the login flow, cookies are sent to the deployer API.
+The API will then pick the value stored in the sessionid cookie. If the authentication against the external
+service fails, the web UI will users to your authentication service login page.
+
+This assumes that the deployer and your authentication service are hosted on the same domain.
 
 #### Authorization
 
