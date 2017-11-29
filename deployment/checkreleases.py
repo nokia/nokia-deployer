@@ -43,6 +43,7 @@ class CheckReleasesWorker(object):
                                     release_status = execution.get_release_status(executils.Host.from_server(srv, env.remote_user), env.target_path, get_release_status_timeout)
                                     error_code = release_status.get_error_code()
                                     if release_status.get_error():
+                                        logger.warning("Server:[{}] error executing ssh command (error_code:{})".format(srv.name, error_code))
                                         if error_code == 255:
                                             logger.warning("Server:[{}] error executing ssh command (error_code:{}), ignore releases check".format(srv.name, error_code))
                                             continue
