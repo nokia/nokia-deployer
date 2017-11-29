@@ -44,7 +44,7 @@ class CheckReleasesWorker(object):
                                     error_code = release_status.get_error_code()
                                     if release_status.get_error():
                                         logger.warning("Server:[{}] error executing ssh command (error_code:{})".format(srv.name, error_code))
-                                        if error_code == 255:
+                                        if error_code in [1, 255]:
                                             logger.warning("Server:[{}] error executing ssh command (error_code:{}), ignore releases check".format(srv.name, error_code))
                                             continue
                                         # retry after 30 seconds
