@@ -37,13 +37,14 @@ class CheckReleasesWorker(object):
                                     continue
                                 releases = set()
                                 for srv in env.servers:
-                                    if not srv.activated:
-                                        logger.debug("Server:[{}] deactivated, do not check releases".format(srv.name))
+                                    if srv.activated == 0:
+                                        logger.warning("Server:[{}] deactivated, do not check releases".format(srv.name))
                                         continue
                                     release_status = execution.get_release_status(executils.Host.from_server(srv, env.remote_user), env.target_path, get_release_status_timeout)
+                                    error_code = release_status.get_error_code()
                                     if release_status.get_error():
-                                        if release_status.get_error_code() == 255:
-                                            logger.debug("Server:[{}] error executing ssh command, ignore releases check".format(srv.name))
+                                        if error_code == 255:
+                                            logger.warning("Server:[{}] error executing ssh command (error_code:{}), ignore releases check".format(srv.name, error_code))
                                             continue
                                         # retry after 30 seconds
                                         time.sleep(30)
@@ -57,7 +58,7 @@ class CheckReleasesWorker(object):
                                     if age < timedelta(minutes=self._min_minutes):
                                         logger.debug("Ignore diff, commit was deployed less than {} minutes:[{}]".format(self._min_minutes, age))
                                     else:
-                                        logger.debug("Repository:[{}] env:[{}] release:[{}:{}] diff:[{}]".format(repo.name, env.name, str(srv.id), release_status.get_release().commit, age))
+                                        logger.debug("Add release:[{}:{}] repository:[{}] env:[{}] diff:[{}] ssh_error_code:[{}]".format(str(srv.id), release_status.get_release().commit, repo.name, env.name, age, error_code))
                                         releases.add(release_status.get_release().commit)
                                 logger.info("Repository:[{}] env:[{}] releases_count:[{}]".format(repo.name, env.name, len(releases)))
                                 if len(releases) > 1:
