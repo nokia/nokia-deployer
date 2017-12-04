@@ -92,14 +92,14 @@ const RoleList = React.createClass({
     renderPermissions(permissions) {
         const that = this;
         if(permissions.admin) {
-            return <h6>Admin</h6>;
+            return <h6 key="admin">Admin</h6>;
         }
         const out = [];
         if(permissions.impersonate) {
-            out.push(<h6 title='Deploy using the permissions of another user (including admin users), and read all environments.'>Impersonate</h6>);
+            out.push(<h6 title='Deploy using the permissions of another user (including admin users), and read all environments.' key="impersonate">Impersonate</h6>);
         }
         if(permissions.deployer) {
-            out.push(<h6 title='Used by instances of the deployer service'>Deployer</h6>);
+            out.push(<h6 title='Used by instances of the deployer service' key="deployer">Deployer</h6>);
         }
         const toCheck = ['deploy_business_hours', 'deploy', 'read'];
         const humanNames = ['Deploy (business hours only)', 'Deploy', 'Read-only'];
