@@ -241,7 +241,7 @@ function repositoriesByIdReducer(state = Map(), action) {
         }
         Object.values(action.payload.entities.environments).map(environment => {
             // TODO use a Set instead
-            state = state.updateIn([environment.repository, 'environmentsId'], envIds => envIds.concat([environment.id]).toSet().toList());
+            state = state.updateIn([environment.repository_id, 'environmentsId'], envIds => envIds.concat([environment.id]).toSet().toList());
         });
         break;
     case 'DELETE_REPOSITORY':
