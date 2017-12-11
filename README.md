@@ -25,7 +25,7 @@ It requires Python 2.7, a SQL database, and SSH access to the target hosts. That
 below).
 
 The frontend is a Javascript application written in Redux + React ; to use it, you will need an external
-authentification service (details also below).
+authentication service (details also below).
 
 ### Notable features
 
