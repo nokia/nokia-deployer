@@ -143,7 +143,7 @@ external authentication method, while the username + password method is easier t
 to implement integration with another service.
 
 Out-of-the box (using the `deployment.integration.DummyIntegration` module), the deployer provides
-authentification by username + password (sometimes referred to 'token-based' authentification, the token being the password).
+authentication by username + password (sometimes referred to 'token-based' authentication, the token being the password).
 Note that this is not supported by the web UI ; to use the web UI, you will need to write a sessionid
 authentication plugin.
 
@@ -157,9 +157,9 @@ Prior to making requests, a client must get a session token from the deployer, u
 methods above. The session token must then be provided under the "X-Session-Token" HTTP header on each HTTP request, and is
 only valid for a couple of minutes.
 
-The web UI only implements the sessionid authentification workflow (at least for now).
+The web UI only implements the sessionid authentication workflow (at least for now).
 
-##### sessionid authentification
+##### sessionid authentication
 
 This method relies on a "sessionid" provided by an external authentication service.
 This sessionid is exchanded using a HTTP POST request to `/api/auth/wssession` against a deployer token.
