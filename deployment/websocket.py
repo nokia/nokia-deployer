@@ -149,7 +149,8 @@ class WebSocketWorker(object):
             'server.socket_port': self.port,
             'server.socket_host': '0.0.0.0',
             'engine.autoreload.on': False,
-            'log.screen': False
+            'log.screen': False,
+            'environment': 'production'
         })
         self.plugin = DeployerWebSocketPlugin(cherrypy.engine, self)
         self.plugin.subscribe()
