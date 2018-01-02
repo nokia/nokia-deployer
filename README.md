@@ -54,7 +54,7 @@ To integrate the deployer within your infrastructure, you need to:
 ### Project status
 
 The deployer is used in production daily in a small team at Nokia Technologies, but beware: its open-source journey is fairly recent,
-the code could use come cleanup (it has a long history :) ), and both the UI and the API have some rough edges.
+the code could use some cleanup (it has a long history :) ), and both the UI and the API have some rough edges.
 That said, it has proven reliable, and we think it could be of use to others, so here we are.
 
 It is stable enough that backward-compatibility should not be an issue, but we make no guarantees about that.
