@@ -128,9 +128,9 @@ export const updateServerStatus = createAction('UPDATE_SERVER_STATUS', (serverId
     in_progress: false
 }));
 
-export function loadDiff(repositoryId, fromSha, toSha) {
+export function fetchDiff(repositoryId, fromSha, toSha) {
     return dispatch => {
-        const action = createAction('LOAD_DIFF', (repositoryId, fromSha, toSha, status, message) => ({
+        const action = createAction('FETCH_DIFF', (repositoryId, fromSha, toSha, status, message) => ({
             repositoryId,
             fromSha,
             toSha,
@@ -139,7 +139,6 @@ export function loadDiff(repositoryId, fromSha, toSha) {
         }));
         const partial = action.bind(null, repositoryId, fromSha, toSha);
         dispatch(partial('REQUEST', null));
-        dispatch(showDiff());
         Auth.getJSON(`/repositories/${repositoryId}/diff?from=${fromSha}&to=${toSha}`, json => {
             dispatch(partial('SUCCESS', json.diff.diff));
         });

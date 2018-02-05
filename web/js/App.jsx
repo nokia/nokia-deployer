@@ -28,6 +28,7 @@ import UserList from 'components/admin/UserList.jsx';
 import RoleList from 'components/admin/RoleList.jsx';
 import RoleEdit from 'components/admin/RoleEdit.jsx';
 import UserEdit from 'components/admin/UserEdit.jsx';
+import { DiffHandler } from 'components/Diff.jsx';
 import NotFound from 'components/NotFound.jsx';
 import {Router} from 'react-router';
 import {Route} from 'react-router';
@@ -106,6 +107,7 @@ function App() {
                     <Route path="/" component={AppComponent}>
                         <Route path="repositories" component={Repositories}>
                             <Route path=":id" component={RepositoryDetails} />
+                            <Route path=":repositoryId/diff/:fromSha/:toSha" component={DiffHandler} />
                             <Route path=":id/deployments" component={DeploymentHistoryHandler} />
                         </Route>
                         <Route path="deployments/recent" component={RecentDeployments} />

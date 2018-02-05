@@ -14,6 +14,9 @@ const ServerActions = React.createClass({
       registerCommitSelector(el) {
         this.commitSelector = el;
     },
+    contextTypes: {
+        router: React.PropTypes.object.isRequired
+    },
     onDeployButtonClicked() {
         if(!this.props.deploymentAlreadyInProgress) {
             const selectedCommit = this.commitSelector.getSelectedCommit();
@@ -49,7 +52,7 @@ const ServerActions = React.createClass({
             { this.props.environment.get('deployAuthorized') ?
                 <div className="form-group">
                     <div className="col-sm-8">
-                        <CommitSelector 
+                        <CommitSelector
                             commits={deployableCommits}
                             ref={this.registerCommitSelector}
                             currentCommit={this.props.server.getIn(['detailsByEnv', this.props.environment.get('id'), 'commit'])}
@@ -78,13 +81,11 @@ const ServerActions = React.createClass({
     },
     onDiffButtonClicked(e) {
         e.preventDefault();
-        this.props.dispatch(
-            Actions.loadDiff(
-                this.props.repositoryId,
-                this.props.server.getIn(['detailsByEnv', this.props.environment.get('id'), 'commit']),
-                this.commitSelector.getSelectedCommit()
-            )
-        );
+        const from =  this.props.server.getIn(['detailsByEnv', this.props.environment.get('id'), 'commit']);
+        const to =  this.commitSelector.getSelectedCommit();
+        const url = `/repositories/${this.props.environment.get('repositoryId')}/diff/${from}/${to}`;
+        const win = window.open(url, '_blank');
+        win.focus();
     }
 });
 

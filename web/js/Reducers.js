@@ -256,21 +256,16 @@ function repositoriesByIdReducer(state = Map(), action) {
     return state;
 }
 
-function diffReducer(state = Map({ fromSha: null, toSha: null, message: null, visible: false, status: null}), action) {
+function diffsByRepoReducer(state = Map(), action) {
     switch(action.type) {
-    case 'SHOW_DIFF':
-        state = state.set('visible', true);
-        break;
-    case 'HIDE_DIFF':
-        state = state.set('visible', false).
-            set('message', null);
-        break;
-    case 'LOAD_DIFF':
-        state = state.set('fromSha', action.payload.fromSha).  set('toSha', action.payload.toSha).
-            set('status', action.payload.status);
-        if(action.payload.status === 'SUCCESS') {
-            state = state.set('message', action.payload.message);
+    case 'FETCH_DIFF':
+        if(action.payload.status !== 'SUCCESS') {
+            break;
         }
+        state = state.setIn(
+            [action.payload.repositoryId, action.payload.fromSha, action.payload.toSha, 'message'],
+            action.payload.message
+        );
         break;
     }
     return state;
@@ -443,7 +438,7 @@ function websocketStateReducer(state = Map({lastPing: moment().freeze()}), actio
 const appReducer = combineReducers({
     environmentsById: environmentsByIdReducer,
     repositoriesById: repositoriesByIdReducer,
-    diff: diffReducer,
+    diffsByRepo: diffsByRepoReducer,
     deploymentsById: deploymentsByIdReducer,
     user: userReducer,
     routing: routeReducer,

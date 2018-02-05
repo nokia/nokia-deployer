@@ -1,7 +1,6 @@
 //Copyright (C) 2016 Nokia Corporation and/or its subsidiary(-ies).
 import HeaderBar from './HeaderBar.jsx';
 import Menu from './Menu.jsx';
-import DiffModal from 'components/DiffModal.jsx';
 import Alert from 'components/Alert.jsx';
 import { connect } from 'react-redux';
 import React from 'react';
@@ -13,9 +12,6 @@ import SimpleRepositoryList from 'components/SimpleRepositoryList.jsx';
 import Login from './Login.jsx';
 import Auth from 'Auth';
 
-const ReduxDiffModal = connect(state => ({
-    diff: state.get('diff')
-}))(DiffModal);
 
 const App = React.createClass({
     contextTypes: {
@@ -69,7 +65,6 @@ const App = React.createClass({
                         }
                     </div>
                 </div> }
-                <ReduxDiffModal />
             </div>
         );
     },
