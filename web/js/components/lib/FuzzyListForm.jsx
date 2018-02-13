@@ -15,7 +15,7 @@ const FuzzyListForm = React.createClass({
         placeholder: React.PropTypes.string.isRequired,
         // called when an element is added or removed, get the currently selected elements as a parameter
         onChange: React.PropTypes.func,
-        // must be a subset of elements
+        // must be a subset of elements ; if you change this after initial render, the user will lose its current selection
         initialElements: React.PropTypes.instanceOf(Immutable.List).isRequired
     },
     getDefaultProps() {
@@ -27,6 +27,11 @@ const FuzzyListForm = React.createClass({
         return {
             selectedElements: this.props.initialElements.toArray()
         };
+    },
+    componentWillReceiveProps(newProps) {
+        if(newProps.initialElements != this.props.initialElements) {
+            this.setState({ selectedElements: newProps.initialElements.toArray() });
+        }
     },
     getSelectedElements() {
         return this.state.selectedElements;
