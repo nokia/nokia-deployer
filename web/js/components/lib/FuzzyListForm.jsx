@@ -15,29 +15,13 @@ const FuzzyListForm = React.createClass({
         placeholder: React.PropTypes.string.isRequired,
         // called when an element is added or removed, get the currently selected elements as a parameter
         onChange: React.PropTypes.func,
-        // must be a subset of elements ; if you change this after initial render, the user will lose its current selection
-        initialElements: React.PropTypes.instanceOf(Immutable.List).isRequired
+        // must be a subset of elements
+        selectedElements: React.PropTypes.instanceOf(Immutable.List).isRequired
     },
     getDefaultProps() {
         return {
             onChange() {}
         };
-    },
-    getInitialState() {
-        return {
-            selectedElements: this.props.initialElements.toArray()
-        };
-    },
-    componentWillReceiveProps(newProps) {
-        if(newProps.initialElements != this.props.initialElements) {
-            this.setState({ selectedElements: newProps.initialElements.toArray() });
-        }
-    },
-    getSelectedElements() {
-        return this.state.selectedElements;
-    },
-    reset() {
-        this.setState(this.getInitialState());
     },
     render() {
         const that = this;
@@ -49,37 +33,23 @@ const FuzzyListForm = React.createClass({
                     compareWith={that.props.compareWith}
                     placeholder={that.props.placeholder}
                     onElementSelected={that.addElement} />
-                {that.state.selectedElements.map((el, index) => <div key={index} className="row">
+                {that.props.selectedElements.map((el, index) => <div key={index} className="row">
                     <div className="col-sm-5 form-align"> {that.props.renderElement(el)} </div>
                     <div className="col-sm-4">
                         {that.props.renderElementForm ? that.props.renderElementForm(el) : null}
                     </div>
                     <div className="col-sm-3">
-                        <button type="button" className="btn btn-sm btn-default" onClick={that.removeElement(el)}>Remove</button>
+                        <button type="button" className="btn btn-sm btn-default" onClick={() => that.removeElement(el)}>Remove</button>
                     </div>
                 </div>)}
             </div>
         );
     },
     addElement(el) {
-        const index = this.state.selectedElements.indexOf(el);
-        if (index != -1) {
-            return;
-        }
-        const selectedElements = this.state.selectedElements.concat(el);
-        this.setState({selectedElements});
-        this.props.onChange(selectedElements);
+        this.props.onChange(this.props.selectedElements.push(el));
     },
     removeElement(el) {
-        const that = this;
-        return () => {
-            const index = that.state.selectedElements.indexOf(el);
-            if (index > -1) {
-                const selectedElements = that.state.selectedElements.slice(0, index).concat(that.state.selectedElements.slice(index + 1));
-                that.setState({selectedElements});
-                that.props.onChange(selectedElements);
-            }
-        };
+        this.props.onChange(this.props.selectedElements.delete(this.props.selectedElements.indexOf(el)));
     }
 });
 

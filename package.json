@@ -43,7 +43,6 @@
     "react": "=15.2.0",
     "react-addons-linked-state-mixin": "^15.3.0",
     "react-addons-pure-render-mixin": "^15.3.0",
-    "react-addons-update": "^15.3.0",
     "react-dom": "=15.3.0",
     "react-immutable-proptypes": "^2.0.0",
     "react-onclickoutside": "^4.5.0",

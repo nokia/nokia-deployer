@@ -4,7 +4,7 @@ import ImmutablePropTypes from 'react-immutable-proptypes';
 import PureRenderMixin from 'react-addons-pure-render-mixin';
 import LinkedStateMixin from 'react-addons-linked-state-mixin';
 import FuzzyListForm from '../../lib/FuzzyListForm.jsx';
-import Immutable from 'immutable';
+import { List } from 'immutable';
 
 const UserForm = React.createClass({
     mixins: [PureRenderMixin, LinkedStateMixin],
@@ -31,13 +31,16 @@ const UserForm = React.createClass({
         let rolesId = [];
         let authTokenAllowed = false;
         let accountAuthAllowed = true;
+        let selectedRoles = List();
         if(this.props.user) {
+            const that = this;
             username = this.props.user.get('username');
             email = this.props.user.get('email');
             accountid = this.props.user.get('accountid');
             rolesId = this.props.user.get('rolesId').toList();
             authTokenAllowed = this.props.user.get('authTokenAllowed');
             accountAuthAllowed = this.props.user.get('accountid') != -1;
+            selectedRoles = this.props.user.get('rolesId').map(roleId => that.props.rolesById.get(roleId)).toList();
         }
         return {
             email,
@@ -46,22 +49,26 @@ const UserForm = React.createClass({
             rolesId,
             authToken: "",
             authTokenAllowed,
-            accountAuthAllowed
+            accountAuthAllowed,
+            selectedRoles
         };
     },
     reset() {
         this.setState(this.getInitialState());
-        this.refs.rolesSelector.reset();
     },
     onRolesChanged(roles) {
-        this.setState({rolesId: roles.map(role => role.get('id'))});
+        this.setState({selectedRoles: roles});
+    },
+    componentWillReceiveProps(nextProps) {
+        if((nextProps.user != this.props.user || nextProps.rolesById != this.props.rolesById) && nextProps.user) {
+            const that = this;
+            this.setState({
+                selectedRoles: nextProps.user.get('rolesId').map(roleId => that.props.rolesById.get(roleId)).toList()
+            });
+        }
     },
     render() {
-        let initialRoles = Immutable.List();
         const that = this;
-        if(this.props.user) {
-            initialRoles = this.props.user.get('rolesId').map(roleId => that.props.rolesById.get(roleId)).toList();
-        }
         return <form className="form-horizontal">
             <div className="form-group">
                 <label className="col-sm-2 control-label">Name</label>
@@ -98,7 +105,7 @@ const UserForm = React.createClass({
                 <div className="col-sm-offset-2 col-sm-5"  data-toggle="tooltip" data-placement="right" title="For services interfacing with the deployer." ref="tooltip2">
                     <div className="checkbox row">
                         <label>
-                            <input type="checkbox" checkedLink={that.linkState('authTokenAllowed')}/> Allow token authentification 
+                            <input type="checkbox" checkedLink={that.linkState('authTokenAllowed')}/> Allow token authentification
                         </label>
                     </div>
                 </div>
@@ -116,10 +123,10 @@ const UserForm = React.createClass({
             <div className="form-group">
                 <label className="col-sm-2 control-label">Roles</label>
                 <div className="col-sm-5">
-                    <FuzzyListForm ref="rolesSelector"
+                    <FuzzyListForm
                         onChange={this.onRolesChanged}
                         elements={this.props.rolesById.toList()}
-                        initialElements={initialRoles}
+                        selectedElements={this.state.selectedRoles}
                         renderElement={role => role.get('name')}
                         placeholder=""
                         compareWith={role => role.get('name')} />
@@ -145,7 +152,7 @@ const UserForm = React.createClass({
         if(!this.state.accountAuthAllowed) {
             accountid = -1;
         }
-        this.props.onSubmit(this.state.username, this.state.email, accountid, this.state.rolesId, this.state.authTokenAllowed, this.state.authToken);
+        this.props.onSubmit(this.state.username, this.state.email, accountid, this.state.selectedRoles.map(role => role.get('id')).toJS(), this.state.authTokenAllowed, this.state.authToken);
     }
 });
 
