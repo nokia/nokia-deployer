@@ -4,8 +4,9 @@ import ImmutablePropTypes from 'react-immutable-proptypes';
 import PureRenderMixin from 'react-addons-pure-render-mixin';
 import LinkedStateMixin from 'react-addons-linked-state-mixin';
 import FuzzyListForm from '../../lib/FuzzyListForm.jsx';
-import update from 'react-addons-update';
+import { List, Map } from 'immutable';
 
+const PERMISSIONS = [['read', 'Read'], ['deploy_business_hours', 'Deploy (business hours only)'], ['deploy', 'Deploy']];
 
 const RoleForm = React.createClass({
     mixins: [PureRenderMixin, LinkedStateMixin],
@@ -23,27 +24,46 @@ const RoleForm = React.createClass({
             permissions: React.PropTypes.object.isRequired
         })
     },
-    getInitialState() {
+    stateFromProps(props) {
         let roleName = "";
-        let permissions = {};
-        if(this.props.role) {
-            roleName = this.props.role.get('name');
-            // permissions
-            permissions = this.props.role.get('permissions');
+        // FIXME: do not hardcode this permission list in several places in the backend/frontend
+        let selectedPermissions = Map({'read': List(), 'deploy': List(), 'deploy_business_hours': List()});
+        let currentPermissions = {'admin': false, 'deployer': false, 'impersonate': false};
+        if(props.role) {
+            roleName = props.role.get('name');
+            currentPermissions = props.role.get('permissions');
+            PERMISSIONS.map(([permissionType, _]) => {
+                if (currentPermissions.hasOwnProperty(permissionType)) {
+                    selectedPermissions = selectedPermissions.set(
+                        permissionType,
+                        List(currentPermissions[permissionType].map(
+                            environmentId => props.environmentsById.get(environmentId)
+                        )).filter(env => env != null)
+                    );
+                }
+            });
         }
-        const isAdmin = permissions.admin === true;
-        const isDeployer = permissions.deployer === true;
-        const canImpersonate = permissions.impersonate === true;
+        const isAdmin = currentPermissions.admin === true;
+        const isDeployer = currentPermissions.deployer === true;
+        const canImpersonate = currentPermissions.impersonate === true;
         return {
             roleName,
-            permissions,
+            selectedPermissions,
             isAdmin,
             canImpersonate,
             isDeployer
         };
     },
+    getInitialState() {
+        return this.stateFromProps(this.props);
+    },
     renderEnv(env) {
         return `${env.get('repositoryName')} / ${env.get('name')}`;
+    },
+    componentWillReceiveProps(nextProps) {
+        if(nextProps.role != this.props.role || this.props.environmentsById != nextProps.environmentsById) {
+            this.setState(this.stateFromProps(nextProps));
+        }
     },
     render() {
         const that = this;
@@ -60,7 +80,7 @@ const RoleForm = React.createClass({
                 <div className="col-sm-offset-2 col-sm-5">
                     <div className="checkbox row">
                         <label>
-                            <input type="checkbox" checkedLink={that.linkState('isAdmin')}/> Admin 
+                            <input type="checkbox" checkedLink={that.linkState('isAdmin')}/> Admin
                             { that.state.isAdmin ? <p class="text-muted">All others permissions are implied by 'Admin'.</p>: null}
                         </label>
                     </div>
@@ -80,17 +100,14 @@ const RoleForm = React.createClass({
             }
             { that.state.isAdmin  || that.state.isDeployer ? null :
                 <div>
-                    {[['read', 'Read'], ['deploy_business_hours', 'Deploy (business hours only)'], ['deploy', 'Deploy']].map(permissionDef => {
-                        const permissionType = permissionDef[0];
-                        const humanName = permissionDef[1];
-                        const initialEnvs = that.props.environmentsById.filter((env, envId) => that.state.permissions[permissionType] != null && that.state.permissions[permissionType].indexOf(envId) != -1).toList();
+                    {PERMISSIONS.map(([permissionType, humanName]) => {
                         return <div key={permissionType} className="form-group">
                             <label className="col-sm-2 control-label">{humanName}</label>
                             <div className="col-sm-5">
-                                <FuzzyListForm  ref="readPermissionsSelector"
+                                <FuzzyListForm
                                     onChange={that.onPermissionsChanged(permissionType)}
                                     elements={that.props.environmentsById.toList()}
-                                    initialElements={initialEnvs}
+                                    selectedElements={that.state.selectedPermissions.get(permissionType)}
                                     renderElement={that.renderEnv}
                                     placeholder="apiv2 / dev"
                                     compareWith={that.renderEnv} />
@@ -101,7 +118,7 @@ const RoleForm = React.createClass({
                         <div className="col-sm-offset-2 col-sm-5">
                             <div className="checkbox row">
                                 <label>
-                                    <input type="checkbox" checkedLink={that.linkState('canImpersonate')}/> Allow impersonation (deploy using the permissions of another user, useful for bots. Implies the right to read any environment.) 
+                                    <input type="checkbox" checkedLink={that.linkState('canImpersonate')}/> Allow impersonation (deploy using the permissions of another user, useful for bots. Implies the right to read any environment.)
                                     { that.state.canImpersonate ? <p className="text-warning">Warning: one can impersonate admin users too!</p> : null}
                                 </label>
                             </div>
@@ -119,10 +136,8 @@ const RoleForm = React.createClass({
     onPermissionsChanged(permissionType) {
         const that = this;
         return environments => {
-            const command = {};
-            command[permissionType] = {$set: environments.map(env => env.get('id'))};
-            const permissions = update(that.state.permissions, command);
-            that.setState({permissions});
+            const selectedPermissions = that.state.selectedPermissions.set(permissionType, environments);
+            that.setState({selectedPermissions});
         };
     },
     onSubmit() {
@@ -130,13 +145,16 @@ const RoleForm = React.createClass({
         if(this.state.isAdmin) {
             permissions = {admin: true};
         } else {
-            permissions = this.state.permissions;
             if(this.state.canImpersonate) {
                 permissions.impersonate = true;
             }
             if(this.state.isDeployer) {
                 permissions.deployer = true;
             }
+            PERMISSIONS.map(([permissionType, _]) => {
+                permissions[permissionType] = this.state.selectedPermissions.get(permissionType).map(environment => environment.get("id")).toJS();
+            });
+
         }
         this.props.onSubmit(this.state.roleName, permissions);
     },

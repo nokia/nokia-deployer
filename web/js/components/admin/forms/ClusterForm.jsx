@@ -4,7 +4,7 @@ import ImmutablePropTypes from 'react-immutable-proptypes';
 import PureRenderMixin from 'react-addons-pure-render-mixin';
 import FuzzyListForm from '../../lib/FuzzyListForm.jsx';
 import LinkedStateMixin from 'react-addons-linked-state-mixin';
-import Immutable from 'immutable';
+import { List } from 'immutable';
 
 const ClusterForm = React.createClass({
     mixins: [LinkedStateMixin],
@@ -30,13 +30,13 @@ const ClusterForm = React.createClass({
     getInitialState() {
         let clusterName = "";
         let haproxyHost = "";
-        let selectedServers = [];
+        let selectedServers = List();
         const haproxyKeys = {}; // map server id to server haproxyKey
         const that = this;
         if(this.props.cluster) {
             clusterName = this.props.cluster.get('name');
             haproxyHost = this.props.cluster.get('haproxyHost');
-            selectedServers = this.props.cluster.get('servers').map(server => that.props.serversById.get(server.get('serverId'))).toArray();
+            selectedServers = this.props.cluster.get('servers').map(server => that.props.serversById.get(server.get('serverId')));
             this.props.cluster.get('servers').map(server => {
                 haproxyKeys[server.get('serverId')] = server.get('haproxyKey');
             });
@@ -50,6 +50,13 @@ const ClusterForm = React.createClass({
     },
     onServersChanged(servers) {
         this.setState({selectedServers: servers});
+    },
+    componentWillReceiveProps(nextProps) {
+        if(nextProps.cluster && (nextProps.cluster != this.props.cluster || nextProps.serversById != this.props.serversById)) {
+            this.setState({
+                selectedServers: nextProps.cluster.get('servers').map(server => nextProps.serversById.get(server.get('serverId')))
+            });
+        }
     },
     renderHaproxyKeyInput(server) {
         return <input className="form-control input-sm"
@@ -67,11 +74,7 @@ const ClusterForm = React.createClass({
         }
     },
     render() {
-        let initialServers = Immutable.List();
         const that = this;
-        if(this.props.cluster) {
-            initialServers = this.props.cluster.get('servers').map(server => that.props.serversById.get(server.get('serverId')));
-        }
         return (
             <form className="form-horizontal">
                 <div className="form-group">
@@ -89,10 +92,10 @@ const ClusterForm = React.createClass({
                 <div className="form-group">
                     <label className="col-sm-2 control-label">Servers</label>
                     <div className="col-sm-8">
-                        <FuzzyListForm  ref="serversSelector"
+                        <FuzzyListForm
                             onChange={this.onServersChanged}
                             elements={this.props.serversById.toList()}
-                            initialElements={initialServers}
+                            selectedElements={this.state.selectedServers}
                             renderElement={server => server.get('name')}
                             placeholder="server.example.com"
                             renderElementForm={this.renderHaproxyKeyInput}
@@ -109,17 +112,15 @@ const ClusterForm = React.createClass({
     },
     reset() {
         this.setState(this.getInitialState());
-        this.refs.serversSelector.reset();
     },
     onSubmit() {
         const serversHaproxy = [];
-        for(let i = 0, len = this.state.selectedServers.length; i < len; i++) {
-            const server = this.state.selectedServers[i];
+        this.state.selectedServers.forEach(server => {
             serversHaproxy.push({
                 serverId: server.get('id'),
                 haproxyKey: (this.state.haproxyKeys[server.get('id')] || null)
             });
-        }
+        });
         this.props.onSubmit(this.state.clusterName, this.state.haproxyHost, serversHaproxy);
     }
 });

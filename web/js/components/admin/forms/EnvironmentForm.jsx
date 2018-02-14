@@ -4,7 +4,7 @@ import ImmutablePropTypes from 'react-immutable-proptypes';
 import PureRenderMixin from 'react-addons-pure-render-mixin';
 import FuzzyListForm from '../../lib/FuzzyListForm.jsx';
 import LinkedStateMixin from 'react-addons-linked-state-mixin';
-import Immutable from 'immutable';
+import { List } from 'immutable';
 
 const EnvironmentForm = React.createClass({
     mixins: [PureRenderMixin, LinkedStateMixin],
@@ -30,6 +30,7 @@ const EnvironmentForm = React.createClass({
     },
     getInitialState() {
         if(this.props.environment) {
+            const that = this;
             const env = this.props.environment;
             return {
                 environmentName: env.get('name'),
@@ -40,7 +41,7 @@ const EnvironmentForm = React.createClass({
                 targetPath: env.get('targetPath'),
                 remoteUser: env.get('remoteUser'),
                 syncOptions: env.get('syncOptions'),
-                clustersId: env.get('clustersId').toArray(),
+                selectedClusters: env.get('clustersId').map(clusterId => that.props.clustersById.get(clusterId))
             };
         }
         return {
@@ -52,23 +53,26 @@ const EnvironmentForm = React.createClass({
             targetPath: process.env.DEFAULT_TARGET_PATH + this.props.repositoryName,
             remoteUser: "scaleweb",
             syncOptions: "",
-            clustersId: []
+            selectedClusters: List()
         };
     },
     reset() {
         this.setState(this.getInitialState());
-        this.refs.clustersSelector.reset();
     },
     onClustersChanged(clusters) {
-        this.setState({clustersId: clusters.map(cluster => cluster.get('id'))});
+        this.setState({selectedClusters: clusters});
+    },
+    componentWillReceiveProps(nextProps) {
+        if(this.props.environment.get('id') != nextProps.environment.get('id') ||
+            this.props.clustersById !== nextProps.clustersById) {
+            this.setState({
+                selectedClusters: nextProps.environment.get('clustersId').map(clusterId => nextProps.clustersById.get(clusterId))
+            });
+        }
     },
     render() {
         const that = this;
-        let initialClusters = Immutable.List();
-        if(this.props.environment) {
-            initialClusters = this.props.environment.get('clustersId').map(clusterId => that.props.clustersById.get(clusterId));
-        }
-	const displayTargetPathWarning = !this.state.targetPath.endsWith(this.props.repositoryName);
+        const displayTargetPathWarning = !this.state.targetPath.endsWith(this.props.repositoryName);
         return (
             <form className="form-horizontal">
                 <div className="form-group">
@@ -120,10 +124,10 @@ const EnvironmentForm = React.createClass({
                 <div className="form-group">
                     <label className="col-sm-2 control-label">Clusters</label>
                     <div className="col-sm-5">
-                        <FuzzyListForm ref="clustersSelector"
+                        <FuzzyListForm
                             onChange={this.onClustersChanged}
                             elements={this.props.clustersById.toList()}
-                            initialElements={initialClusters}
+                            selectedElements={this.state.selectedClusters}
                             renderElement={
                                 cluster => {
                                     if(!cluster) {
@@ -151,7 +155,7 @@ const EnvironmentForm = React.createClass({
         );
     },
     onSubmit() {
-        this.props.onSubmit(this.state.environmentName, this.state.autoDeploy, this.state.deployBranch, this.state.envOrder, this.state.targetPath, this.state.remoteUser, this.state.syncOptions, this.state.clustersId, this.state.failDeployOnFailedTests);
+        this.props.onSubmit(this.state.environmentName, this.state.autoDeploy, this.state.deployBranch, this.state.envOrder, this.state.targetPath, this.state.remoteUser, this.state.syncOptions, this.state.selectedClusters.map(cluster => cluster.get('id')).toJS(), this.state.failDeployOnFailedTests);
     }
 });
 
