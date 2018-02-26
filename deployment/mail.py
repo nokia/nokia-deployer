@@ -39,8 +39,11 @@ class MailWorker():
                     pass
                 except smtplib.SMTPServerDisconnected:
                     # Reconnect and retry once
-                    smtp.connect(self.mta)
-                    self._send_mail(smtp, sender, receivers, subject, message, attachments)
+                    try:
+                        smtp.connect(self.mta)
+                        self._send_mail(smtp, sender, receivers, subject, message, attachments)
+                    except Exception:
+                        logger.exception("Unhandled exception in mail thread")
                 except Exception:
                     logger.exception("Unhandled exception in mail thread")
             smtp.quit()
