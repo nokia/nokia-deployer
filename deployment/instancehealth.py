@@ -9,10 +9,16 @@ class InstanceHealth(object):
         self._lock = threading.Lock()
 
     def add_degraded(self, key, error):
+        """
+        Args:
+            key (str)
+            error (str)
+        """
         with self._lock:
             if key not in self._errors:
                 self._errors[key] = []
-            self._errors[key].append(error)
+            if error not in self._errors[key]:
+                self._errors[key].append(error)
 
     def set_ok(self, key):
         with self._lock:
