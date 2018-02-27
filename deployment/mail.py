@@ -29,26 +29,18 @@ class MailWorker():
         self.running = True
 
     def start(self):
-        try:
-            smtp = smtplib.SMTP(self.mta)
-            while self.running:
-                try:
-                    (sender, receivers, subject, message, attachments) = MAIL_QUEUE.get(block=True, timeout=2)
-                    self._send_mail(smtp, sender, receivers, subject, message, attachments)
-                except Empty:
-                    pass
-                except smtplib.SMTPServerDisconnected:
-                    # Reconnect and retry once
-                    try:
-                        smtp.connect(self.mta)
-                        self._send_mail(smtp, sender, receivers, subject, message, attachments)
-                    except Exception:
-                        logger.exception("Unhandled exception in mail thread")
-                except Exception:
-                    logger.exception("Unhandled exception in mail thread")
-            smtp.quit()
-        except Exception:
-            logger.exception("Could not start mail worker")
+        smtp = smtplib.SMTP(self.mta)
+        while self.running:
+            try:
+                (sender, receivers, subject, message, attachments) = MAIL_QUEUE.get(block=True, timeout=2)
+                self._send_mail(smtp, sender, receivers, subject, message, attachments)
+            except Empty:
+                pass
+            except smtplib.SMTPServerDisconnected:
+                # Reconnect and retry once
+                smtp.connect(self.mta)
+                self._send_mail(smtp, sender, receivers, subject, message, attachments)
+        smtp.quit()
 
     def _send_mail(self, smtp, sender, receivers, subject, message, attachments):
         if len(attachments) == 0:

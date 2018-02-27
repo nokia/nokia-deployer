@@ -1,20 +1,21 @@
 # Copyright (C) 2016 Nokia Corporation and/or its subsidiary(-ies).
+import ConfigParser
+from functools import wraps
+import importlib
+from logging import getLogger
 import os
 import threading
-import ConfigParser
 import time
-from logging import getLogger
-import importlib
 
 import beanstalkc
 
 from . import api
-from .worker import DeployerWorker, AsyncFetchWorker
 from . import execution, mail, notification, websocket, database
-from .log import configure_logging
-from .cleaner import CleanerWorker
 from .instancehealth import InstanceHealth
+from .log import configure_logging
 from .checkreleases import CheckReleasesWorker
+from .cleaner import CleanerWorker
+from .worker import DeployerWorker, AsyncFetchWorker
 
 
 logger = getLogger(__name__)
@@ -28,29 +29,66 @@ def _import_class(class_path):
 
 class WorkerSupervisor(object):
     """Spawns and manages all the deployer workers.
-    All workers must define the start (will be called in a new thread), stop (can be called from any thread),
-    and name properties.
+
+    A worker is a class with the following interface:
+    * the `start` method must be a blocking method, and will be called in a new thread.
+      If this method exits by raising an exception, it will be called again.
+    * the `stop` method can be called from any thread and must cause the `start` method to return.
+    * the `name` property describes the worker
     """
 
     # Main entry point for the deployer
     def __init__(self, config_path):
+        self.threads = []
+        self._health = InstanceHealth()
+        self._running = True
+        self.lock = threading.Lock()
+
         configure_logging()
+
         logger.info("Using configuration file at {}".format(config_path))
         if not os.path.isfile(config_path):
             raise ValueError("Can not read the configuration file at {}".format(config_path))
         config = ConfigParser.ConfigParser()
         config.read(config_path)
         self.config_path = config_path
+
         database.init_db(config.get("database", "connection"))
-        self.threads = []
-        self._health = InstanceHealth()
+
         workers = self._build_workers(config)
         self._spawn_workers(workers)
-        self._running = True
-        self.lock = threading.Lock()
+
         t = threading.Thread(name="supervisor", target=self._monitor)
         t.daemon = True  # we can forcefully kill this thread
         t.start()
+
+    def _restart_function_on_exception(self, f, context):
+        """If the callable f raises an exception, log the exception then call f again.
+
+        This function will not propagate exceptions, and will return only when f returns without raising
+        an exception.
+        This is useful to ensure that a worker thread does not die.
+        The function will not be called again is the deployer is exiting.
+
+        Args:
+            f (callable)
+            context (str): will be displayed in log messages if an exception occurs
+        """
+
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            while self._running:
+                try:
+                    out = f(*args, **kwargs)
+                    if self._running:
+                        logger.error("A worker main function returned while the deployer is still running, "
+                                     "this is a bug ({}).".format(context))
+                    return out
+                except Exception:
+                    logger.exception("Unhandled exception ({}), will restart the worker.".format(context))
+                time.sleep(30)
+
+        return wrapped
 
     def _build_notifiers(self, ws_worker, mail_sender, notify_mails, carbon_host, carbon_port, other_deployer_urls, deployer_username, deployer_token, provider):
         mail = notification.MailNotifier(mail_sender, notify_mails)
@@ -135,11 +173,17 @@ class WorkerSupervisor(object):
 
     def _spawn_workers(self, workers):
         for w in workers:
-            self._add_worker(w)
+            self._start_worker(w)
         self.notifier.dispatch(notification.Notification.deployer_started())
 
-    def _add_worker(self, worker, *args, **kwargs):
-        t = threading.Thread(name=worker.name, target=worker.start, args=args, kwargs=kwargs)
+    def _start_worker(self, worker, *args, **kwargs):
+        t = threading.Thread(name=worker.name,
+                             target=self._restart_function_on_exception(
+                                 worker.start,
+                                 context="in worker {}".format(worker.name)
+                             ),
+                             args=args,
+                             kwargs=kwargs)
         self.threads.append((t, worker))
         t.start()
         logger.debug("Started worker {} (tid {})".format(worker.name, t.ident))
