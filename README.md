@@ -162,7 +162,7 @@ The web UI only implements the sessionid authentication workflow (at least for n
 ##### sessionid authentication
 
 This method relies on a "sessionid" provided by an external authentication service.
-This sessionid is exchanded using a HTTP POST request to `/api/auth/wssession` against a deployer token.
+This sessionid is exchanged using a HTTP POST request to `/api/auth/wssession` against a deployer token.
 
 To use this method, you need to write a small Python plugin to match this sessionid against one of the accountid
 stored in the deployer database.
@@ -173,7 +173,7 @@ provide this token in each request (under the `X-Auth-Token` header) to authenti
 
 The web UI only supports this authentication method. During the login flow, cookies are sent to the deployer API.
 The API will then pick the value stored in the sessionid cookie. If the authentication against the external
-service fails, the web UI will users to your authentication service login page.
+service fails, the web UI will redirect users to your authentication service login page.
 
 This assumes that the deployer and your authentication service are hosted on the same domain.
 
