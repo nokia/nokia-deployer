@@ -83,10 +83,10 @@ You can run this on a build server and copy the resulting files.
 
 ```
 # Install NodeJS (tested with version 4, more recent versions probably work too)
-echo 'deb https://deb.nodesource.com/node_4.x trusty main' > /etc/apt/sources.list.d/nodejs
+echo 'deb https://deb.nodesource.com/node_4.x trusty main' > /etc/apt/sources.list.d/nodejs.list
 curl -s https://deb.nodesource.com/gpgkey/nodesource.gpg.key | apt-key add -
 sudo apt-get update
-sudo apt-get install nodejs npm
+sudo apt-get install nodejs
 
 # Install gulp
 sudo npm install -g gulp
@@ -94,6 +94,10 @@ sudo npm install -g gulp
 # Configure the build
 cp build.config.sample.js build.config.js
 $EDITOR build.config.js
+
+# Install dependencies
+npm install
+
 
 # Build the frontend
 # This will populate the folders `web/static/js` and `web/static/html`.
