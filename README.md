@@ -77,26 +77,27 @@ git clone git@github.com:nokia/nokia-deployer.git
 cd nokia-deployer
 ```
 
-### Web frontend (optional, but highly recommended)
+### Web frontend
 
 You can run this on a build server and copy the resulting files.
 
 ```
-# Install NodeJS (tested with version 4, more recent versions probably work too)
+# Install NodeJS (tested with version 4, more recent versions probably work too) and npm 3
 echo 'deb https://deb.nodesource.com/node_4.x trusty main' > /etc/apt/sources.list.d/nodejs.list
 curl -s https://deb.nodesource.com/gpgkey/nodesource.gpg.key | apt-key add -
 sudo apt-get update
 sudo apt-get install nodejs
+npm install npm3
 
 # Install gulp
-sudo npm install -g gulp
+sudo npm3 install -g gulp
 
 # Configure the build
 cp build.config.sample.js build.config.js
 $EDITOR build.config.js
 
 # Install dependencies
-npm install
+npm3 install
 
 
 # Build the frontend
