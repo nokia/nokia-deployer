@@ -87,7 +87,7 @@ echo 'deb https://deb.nodesource.com/node_4.x trusty main' > /etc/apt/sources.li
 curl -s https://deb.nodesource.com/gpgkey/nodesource.gpg.key | apt-key add -
 sudo apt-get update
 sudo apt-get install nodejs
-npm install npm3
+sudo npm install -g npm3
 
 # Install gulp
 sudo npm3 install -g gulp
