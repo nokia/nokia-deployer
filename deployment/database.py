@@ -65,6 +65,18 @@ def init_db(connection_string):
         schemas.register_schemas(Base)
 
 
+def get_or_create(session, model, defaults=None, **kwargs):
+    instance = session.query(model).filter_by(**kwargs).first()
+    if instance:
+        return instance, False
+    else:
+        params = dict((k, v) for k, v in kwargs.iteritems())
+        params.update(defaults or {})
+        instance = model(**params)
+        session.add(instance)
+        return instance, True
+
+
 @contextmanager
 def session_scope():
     """Provide a transactional scope around a series of operations."""

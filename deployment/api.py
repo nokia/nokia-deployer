@@ -22,6 +22,8 @@ from .auth import issue_token, InvalidSession, NoMatchingUser, hash_token
 
 from sqlalchemy import orm
 
+from . import inventory
+
 logger = getLogger(__name__)
 
 # FIXME: abstract away the "return json..." with a helper
@@ -504,6 +506,29 @@ def account_get(db):
     return json.dumps({'user': m.User.__marshmallow__().dump(request.account).data})
 
 
+@get('/api/clusters/find/<zone>/<cluster_name>')
+@requires_admin
+def cluster_find(zone, cluster_name, db):
+    inv_host = inventory.InventoryHost(default_app().config)
+    clusters = inv_host.find_cluster(cluster_name, zone, True)
+    res = {"clusters": []}
+    if clusters is not None:
+        for cluster in clusters:
+            res["clusters"].append(m.Cluster.__marshmallow__().dump(cluster).data)
+    return json.dumps(res)
+
+
+@get('/api/clusters/<distant_id:int>/<zone>')
+@requires_admin
+def distant_cluster_get(distant_id, zone):
+    inv_host = inventory.InventoryHost(default_app().config)  # TODO : create only one inv_host object
+    cluster, servers = inv_host.get_cluster(distant_id, zone)
+    if cluster is None:
+        abort(400, "no cluster found in inventory with id %s" %(distant_id))
+    schema = m.Server.__marshmallow__(many=True)
+    return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data, 'servers': schema.dump(servers).data})
+
+
 # TODO: protect this route?
 @get('/api/clusters')
 @requires_logged
@@ -518,25 +543,58 @@ def clusters_get(db):
 def clusters_post(db):
     schema = schemas.ClusterPostSchema()
     cluster_def = schema.load(request.json).data
+    ## WITH INVENTORY
+    inv_host = inventory.InventoryHost(default_app().config) # TODO : create only one inv_host object
+    cluster, servers = inv_host.get_cluster(cluster_def['distant_id'], cluster_def['zone']) # not really necessary ?
+    haproxy_keys = {}
+    cluster_servers = []
+
     if cluster_def['haproxy_host'] == '':
         cluster_def['haproxy_host'] = None
-    cluster = m.Cluster(name=cluster_def['name'], haproxy_host=cluster_def['haproxy_host'])
-    servers = []
+    cluster.haproxy_host = cluster_def['haproxy_host']
+
     for server in cluster_def['servers']:
-        s = db.query(m.Server).get(server['server_id'])
-        if s is None:
-            abort(400)
-        if server['haproxy_key'] == '':
-            server['haproxy_key'] = None
-        servers.append(m.ClusterServerAssociation(
-            haproxy_key=server['haproxy_key'],
-            server_def=s,
-            cluster_def=cluster)
-                       )
-    cluster.servers = servers
+        haproxy_keys[server.name] = server['haproxy_key']
+    for server in servers:
+        s, created = database.get_or_create(db, m.Server, defaults=server, distant_id=server.distant_id)
+        print "server ", str(s.id), s.name, "created:", str(created)#TODO: DELETE
+        if server in haproxy_keys:
+            if haproxy_keys[server]=='':
+                haproxy_keys[server] = None
+            cluster_servers.append(m.ClusterServerAssociation(
+                haproxy_key=haproxy_keys[server],
+                server_def=s,
+                cluster_def=cluster))
+        else:
+            db.expunge_all()
+            abort(400, "wrong given servers")
+
+    cluster.servers = cluster_servers
     db.add(cluster)
     db.commit()
     return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
+
+    ## WITH ADMIN PANEL
+    # if cluster_def['haproxy_host'] == '':
+    #     cluster_def['haproxy_host'] = None
+    # cluster = m.Cluster(name=cluster_def['name'], haproxy_host=cluster_def['haproxy_host'])
+    # servers = []
+    # for server in cluster_def['servers']:
+    #     s = db.query(m.Server).get(server['server_id'])
+    #     if s is None:
+    #         abort(400)
+    #     if server['haproxy_key'] == '':
+    #         server['haproxy_key'] = None
+    #     servers.append(m.ClusterServerAssociation(
+    #         haproxy_key=server['haproxy_key'],
+    #         server_def=s,
+    #         cluster_def=cluster)
+    #                    )
+    # cluster.servers = servers
+    # db.add(cluster)
+    # db.commit()
+    # return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
+
 
 
 @delete('/api/clusters/<cluster_id:int>')
@@ -554,30 +612,49 @@ def clusters_delete(cluster_id, db):
 @put('/api/clusters/<cluster_id:int>')
 @requires_admin
 def cluster_put(cluster_id, db):
+    ## WITH INVENTORY
     cluster = db.query(m.Cluster).get(cluster_id)
     if cluster is None:
         abort(404)
     cluster_def = schemas.ClusterPostSchema().load(request.json).data
-    cluster.name = cluster_def['name']
     cluster.haproxy_host = cluster_def['haproxy_host']
     if cluster.haproxy_host == '':
         cluster.haproxy_host = None
-    for server_asso in cluster.servers:
-        db.delete(server_asso)
-    cluster.servers = []
     for server_def in cluster_def['servers']:
-        server = db.query(m.Server).get(server_def["server_id"])
-        if server is None:
-            abort(404, "The server {} does not exist.".format(server_def['server_id']))
+        server_asso = db.query(m.ClusterServerAssociation).filter(m.ClusterServerAssociation.server_id==server_def["server_id"], m.ClusterServerAssociation.cluster_id==cluster_id).one_or_none()
+        if server_asso is None:
+            abort(404, "The server {} does not exist or not in cluster {}.".format(server_def['server_id'], cluster.name))
         if server_def['haproxy_key'] == '':
             server_def['haproxy_key'] = None
-        cluster.servers.append(m.ClusterServerAssociation(
-            haproxy_key=server_def['haproxy_key'],
-            server_def=server,
-            cluster_def=cluster
-        ))
+        server_asso.haproxy_key = server_def['haproxy_key']
     db.commit()
     return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
+
+    ## WITH ADMIN PANEL
+    # cluster = db.query(m.Cluster).get(cluster_id)
+    # if cluster is None:
+    #     abort(404)
+    # cluster_def = schemas.ClusterPostSchema().load(request.json).data
+    # cluster.name = cluster_def['name']
+    # cluster.haproxy_host = cluster_def['haproxy_host']
+    # if cluster.haproxy_host == '':
+    #     cluster.haproxy_host = None
+    # for server_asso in cluster.servers:
+    #     db.delete(server_asso)
+    # cluster.servers = []
+    # for server_def in cluster_def['servers']:
+    #     server = db.query(m.Server).get(server_def["server_id"])
+    #     if server is None:
+    #         abort(404, "The server {} does not exist.".format(server_def['server_id']))
+    #     if server_def['haproxy_key'] == '':
+    #         server_def['haproxy_key'] = None
+    #     cluster.servers.append(m.ClusterServerAssociation(
+    #         haproxy_key=server_def['haproxy_key'],
+    #         server_def=server,
+    #         cluster_def=cluster
+    #     ))
+    # db.commit()
+    # return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
 
 
 @put('/api/repositories/<repository_id:int>')
