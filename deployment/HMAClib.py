@@ -37,6 +37,18 @@ class HMAC:
         logging.info("given:[%s] expected:[%s]" % (given_token, expected_token))
         return given_token == expected_token
 
+    def check_authtoken(self, given_token):
+        decode_token = base64.b64decode(given_token.encode('utf-8'))
+        parts = decode_token.split(':')
+        if len(parts) < 2:
+            logging.error("Malformed auth-token:[%s]" % given_token)
+            return False
+
+        ts_username = parts[0]
+        token = parts[1]
+
+        return self.check_hmac(ts_username, token)
+
     def generate_hmac(self, ts_username):
         hmac_res = hmac.new(self.key, msg=ts_username, digestmod=hashlib.sha256)
         hmac_token = base64.b64encode(hmac_res.digest()).decode('utf-8')

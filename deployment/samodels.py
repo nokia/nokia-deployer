@@ -106,7 +106,7 @@ class Server(Base):
     name = sa.Column(sa.String(255), nullable=False, unique=True)
     port = sa.Column(sa.Integer(), nullable=False, default=22)
     activated = sa.Column(sa.Boolean(), nullable=False, default=True)
-    distant_id = sa.Column(sa.Integer(), nullable=False, default =-1)  # TODO : make it unique ?
+    inventory_key = sa.Column(sa.String(255), nullable=True, unique=True) #mySQL allows multiple NUll values with a UNIQUE constraint
     clusters = orm.relationship("ClusterServerAssociation", back_populates="server_def")
 
 
@@ -122,8 +122,8 @@ class Cluster(Base):
     id = sa.Column(sa.Integer(), nullable=False, primary_key=True, autoincrement=True)
     name = sa.Column(sa.String(), nullable=False, unique=True)
     haproxy_host = sa.Column(sa.String())
-    distant_id = sa.Column(sa.Integer(), nullable=False, default=-1)  # TODO : make it unique ?
-    zone = sa.Column(sa.String())
+    inventory_key = sa.Column(sa.String(255), nullable=True, unique=True) #mySQL allows multiple NUll values with a UNIQUE constraint
+
 
     servers = orm.relationship("ClusterServerAssociation", back_populates="cluster_def")
     environments = orm.relationship("Environment", secondary="environments_clusters", back_populates="clusters")

@@ -23,10 +23,22 @@ from .auth import issue_token, InvalidSession, NoMatchingUser, hash_token
 from sqlalchemy import orm
 
 from . import inventory
+from .HMAClib import HMAC
 
 logger = getLogger(__name__)
 
 # FIXME: abstract away the "return json..." with a helper
+inv_host = None
+
+
+def with_inventory(param):
+    def decorator(func):
+        global inv_host
+        def wrapper(*args, **kwargs):
+            kwargs[param] = inv_host
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
 def enforce(permission):
@@ -77,6 +89,15 @@ def _expunge_user(user, session):
     for role in user.roles + user.default_roles:
         session.expunge(role)
     session.expunge(user)
+
+def decode_hmac(inv_host, request):
+    token = request.get_header('X-Auth')
+    if token is None:
+        abort(403, "forbidden : no token provided")
+    is_valid = inv_host.check_hmac_token(token)
+    if not is_valid:
+        abort(403, "forbidden : invalid or expired token")
+    return True
 
 
 @hook('before_request')
@@ -506,27 +527,90 @@ def account_get(db):
     return json.dumps({'user': m.User.__marshmallow__().dump(request.account).data})
 
 
-@get('/api/clusters/find/<zone>/<cluster_name>')
+@get('/api/inventory_clusters')
 @requires_admin
-def cluster_find(zone, cluster_name, db):
-    inv_host = inventory.InventoryHost(default_app().config)
-    clusters = inv_host.find_cluster(cluster_name, zone, True)
-    res = {"clusters": []}
-    if clusters is not None:
-        for cluster in clusters:
-            res["clusters"].append(m.Cluster.__marshmallow__().dump(cluster).data)
-    return json.dumps(res)
+@with_inventory('inv_host')
+def inventory_cluster_get(db, inv_host=None):
+    if inv_host is not None:
+        clusters = inv_host.get_clusters()
+        if clusters is None:
+            abort(500, 'impossible to get clusters from inventory')
+        return json.dumps({'inventory_clusters': clusters})
+    else:
+        return json.dumps({'inventory_clusters': []})
 
 
-@get('/api/clusters/<distant_id:int>/<zone>')
+@post('/api/inventory_clusters')
 @requires_admin
-def distant_cluster_get(distant_id, zone):
-    inv_host = inventory.InventoryHost(default_app().config)  # TODO : create only one inv_host object
-    cluster, servers = inv_host.get_cluster(distant_id, zone)
-    if cluster is None:
-        abort(400, "no cluster found in inventory with id %s" %(distant_id))
-    schema = m.Server.__marshmallow__(many=True)
-    return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data, 'servers': schema.dump(servers).data})
+@with_inventory('inv_host')
+def inventory_cluster_post(db, inv_host=None):
+    if inv_host is not None:
+        print request.json
+        # TODO : create add route
+        cluster_raw = request.json
+        if 'haproxy_host' not in cluster_raw or 'servers' not in cluster_raw or 'inventory_key' not in cluster_raw:
+            abort(400, 'missing parameter(s)')
+        servers_raw = cluster_raw['servers']
+        del cluster_raw['servers']
+        cluster, servers = inv_host.get_cluster(cluster_raw['inventory_key'])
+        if cluster is None:
+            abort(400, 'inventory_key not found')
+        for server in servers:
+            db_server = db.query(m.Server).filter_by(inventory_key=server.inventory_key).one_or_none()
+            if db_server is None:
+                    # get_or_create only for transition: find servers without inventory_key
+                    db_server, created = database.get_or_create(db, m.Server, defaults=server, name=server.name)
+                    if created:
+                        # db_server.activated = True
+                        db_server.port = 22
+                    else:
+                        db_server.inventory_key = server.inventory_key
+            else:
+                db_server.name = server.name
+                db_server.activated = server.activated
+            asso = m.ClusterServerAssociation(cluster_def=cluster, server_def=db_server)
+            for key in servers_raw:
+                if key['inventory_key'] == server.inventory_key:
+                    asso.haproxy_key = key['haproxy_key']
+                    break
+                db.expunge()
+                abort(400, 'wrong servers parameters')
+            cluster.servers.append(asso)
+        try:
+            db.add(cluster)
+            db.commit()
+        except Exception as e:
+            print e.message
+            db.rollback()
+            abort(500)
+        return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
+
+    else:
+        abort(404)
+
+
+@post('/api/clusters/update')
+#@require something ?
+@with_inventory('inv_host')
+def inventory_update_hook(db, inv_host=None):
+    if inv_host is not None:
+        # decode hmac
+        if decode_hmac(inv_host, request):
+            update_def = request.json
+            print update_def
+            try:
+                if 'clusters' in update_def:
+                    for cluster in update_def['clusters']:
+                        cluster_db = db.query(m.Cluster).filter_by(inventory_key=cluster).one_or_none()
+                        if cluster_db is None:
+                            continue
+                        inv_host.add_cluster_to_update(cluster_db.id, 0)
+                if 'last_update' in update_def:
+                    inv_host.update_remote_timestamp(update_def['last_update'].encode('utf8'))
+            except:
+                abort(400, "wrong update data")
+    else:
+        return json.dumps({})
 
 
 # TODO: protect this route?
@@ -543,58 +627,27 @@ def clusters_get(db):
 def clusters_post(db):
     schema = schemas.ClusterPostSchema()
     cluster_def = schema.load(request.json).data
-    ## WITH INVENTORY
-    inv_host = inventory.InventoryHost(default_app().config) # TODO : create only one inv_host object
-    cluster, servers = inv_host.get_cluster(cluster_def['distant_id'], cluster_def['zone']) # not really necessary ?
-    haproxy_keys = {}
-    cluster_servers = []
-
+    if cluster_def['inventory_key'] is not None:
+        abort(400, 'wrong route for an inventory cluster')
     if cluster_def['haproxy_host'] == '':
         cluster_def['haproxy_host'] = None
-    cluster.haproxy_host = cluster_def['haproxy_host']
-
+    cluster = m.Cluster(name=cluster_def['name'], haproxy_host=cluster_def['haproxy_host'])
+    servers = []
     for server in cluster_def['servers']:
-        haproxy_keys[server.name] = server['haproxy_key']
-    for server in servers:
-        s, created = database.get_or_create(db, m.Server, defaults=server, distant_id=server.distant_id)
-        print "server ", str(s.id), s.name, "created:", str(created)#TODO: DELETE
-        if server in haproxy_keys:
-            if haproxy_keys[server]=='':
-                haproxy_keys[server] = None
-            cluster_servers.append(m.ClusterServerAssociation(
-                haproxy_key=haproxy_keys[server],
-                server_def=s,
-                cluster_def=cluster))
-        else:
-            db.expunge_all()
-            abort(400, "wrong given servers")
-
-    cluster.servers = cluster_servers
+        s = db.query(m.Server).get(server['server_id'])
+        if s is None:
+            abort(400)
+        if server['haproxy_key'] == '':
+            server['haproxy_key'] = None
+        servers.append(m.ClusterServerAssociation(
+            haproxy_key=server['haproxy_key'],
+            server_def=s,
+            cluster_def=cluster)
+        )
+    cluster.servers = servers
     db.add(cluster)
     db.commit()
     return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
-
-    ## WITH ADMIN PANEL
-    # if cluster_def['haproxy_host'] == '':
-    #     cluster_def['haproxy_host'] = None
-    # cluster = m.Cluster(name=cluster_def['name'], haproxy_host=cluster_def['haproxy_host'])
-    # servers = []
-    # for server in cluster_def['servers']:
-    #     s = db.query(m.Server).get(server['server_id'])
-    #     if s is None:
-    #         abort(400)
-    #     if server['haproxy_key'] == '':
-    #         server['haproxy_key'] = None
-    #     servers.append(m.ClusterServerAssociation(
-    #         haproxy_key=server['haproxy_key'],
-    #         server_def=s,
-    #         cluster_def=cluster)
-    #                    )
-    # cluster.servers = servers
-    # db.add(cluster)
-    # db.commit()
-    # return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
-
 
 
 @delete('/api/clusters/<cluster_id:int>')
@@ -611,50 +664,47 @@ def clusters_delete(cluster_id, db):
 
 @put('/api/clusters/<cluster_id:int>')
 @requires_admin
-def cluster_put(cluster_id, db):
-    ## WITH INVENTORY
-    cluster = db.query(m.Cluster).get(cluster_id)
-    if cluster is None:
-        abort(404)
-    cluster_def = schemas.ClusterPostSchema().load(request.json).data
-    cluster.haproxy_host = cluster_def['haproxy_host']
-    if cluster.haproxy_host == '':
-        cluster.haproxy_host = None
-    for server_def in cluster_def['servers']:
-        server_asso = db.query(m.ClusterServerAssociation).filter(m.ClusterServerAssociation.server_id==server_def["server_id"], m.ClusterServerAssociation.cluster_id==cluster_id).one_or_none()
-        if server_asso is None:
-            abort(404, "The server {} does not exist or not in cluster {}.".format(server_def['server_id'], cluster.name))
-        if server_def['haproxy_key'] == '':
-            server_def['haproxy_key'] = None
-        server_asso.haproxy_key = server_def['haproxy_key']
-    db.commit()
-    return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
+@with_inventory('inv_host')
+def cluster_put(cluster_id, db, inv_host=None):
+    try:
+        inv_host.block_update(True)
+        cluster = db.query(m.Cluster).get(cluster_id)
+        if cluster is None:
+            abort(404)
+        cluster_def = schemas.ClusterPostSchema().load(request.json).data
+        cluster.haproxy_host = cluster_def['haproxy_host']
+        if cluster.haproxy_host == '':
+            cluster.haproxy_host = None
 
-    ## WITH ADMIN PANEL
-    # cluster = db.query(m.Cluster).get(cluster_id)
-    # if cluster is None:
-    #     abort(404)
-    # cluster_def = schemas.ClusterPostSchema().load(request.json).data
-    # cluster.name = cluster_def['name']
-    # cluster.haproxy_host = cluster_def['haproxy_host']
-    # if cluster.haproxy_host == '':
-    #     cluster.haproxy_host = None
-    # for server_asso in cluster.servers:
-    #     db.delete(server_asso)
-    # cluster.servers = []
-    # for server_def in cluster_def['servers']:
-    #     server = db.query(m.Server).get(server_def["server_id"])
-    #     if server is None:
-    #         abort(404, "The server {} does not exist.".format(server_def['server_id']))
-    #     if server_def['haproxy_key'] == '':
-    #         server_def['haproxy_key'] = None
-    #     cluster.servers.append(m.ClusterServerAssociation(
-    #         haproxy_key=server_def['haproxy_key'],
-    #         server_def=server,
-    #         cluster_def=cluster
-    #     ))
-    # db.commit()
-    # return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
+        if inv_host is None or cluster.inventory_key is None: # WITH ADMIN PANEL
+            cluster.name = cluster_def['name']
+            for server_asso in cluster.servers:
+                db.delete(server_asso)
+            cluster.servers = []
+            for server_def in cluster_def['servers']:
+                server = db.query(m.Server).get(server_def["server_id"])
+                if server is None:
+                    abort(404, "The server {} does not exist.".format(server_def['server_id']))
+                if server_def['haproxy_key'] == '':
+                    server_def['haproxy_key'] = None
+                cluster.servers.append(m.ClusterServerAssociation(
+                    haproxy_key=server_def['haproxy_key'],
+                    server_def=server,
+                    cluster_def=cluster
+                ))
+        else:    # WITH INVENTORY : update only haproxyvalues
+            for server_def in cluster_def['servers']:
+                server_asso = db.query(m.ClusterServerAssociation).get(server_def["server_id"], cluster_id)
+                if server_asso is None:
+                    abort(404, "The server {} does not exist or not in cluster {}.".format(server_def['server_id'], cluster.name))
+                if server_def['haproxy_key'] == '':
+                    server_def['haproxy_key'] = None
+                server_asso.haproxy_key = server_def['haproxy_key']
+
+        db.commit()
+    finally:
+        inv_host.block_update(False)
+    return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
 
 
 @put('/api/repositories/<repository_id:int>')
@@ -993,7 +1043,7 @@ class ApiWorker(object):
 
     # TODO: use our own config everywhere, do not rely on Bottle for that
     # (eg pass only the config object)
-    def __init__(self, config_path, config, notifier, websocket_notifier, authentificator, health):
+    def __init__(self, config_path, config, notifier, websocket_notifier, authentificator, health, inventory_host=None):
         app = bottle.app()
         app.config.load_config(config_path)
         engine = database.engine()
@@ -1021,6 +1071,9 @@ class ApiWorker(object):
         self.httpd = make_server("0.0.0.0", config.getint('general', 'api_port'), app,
                                  server_class=ThreadingWSGIServer,
                                  handler_class=LoggingWSGIRequestHandler)
+
+        global inv_host
+        inv_host = inventory_host
 
     def _check_for_index_html(self, app):
         index_path = os.path.abspath(os.path.join(app.config['general.web_path'], "html", "index.html"))

@@ -8,7 +8,6 @@ from sqlalchemy import orm
 from . import schemas
 from .samodels import Base
 
-
 _engine = None
 
 
@@ -70,7 +69,10 @@ def get_or_create(session, model, defaults=None, **kwargs):
     if instance:
         return instance, False
     else:
+
         params = dict((k, v) for k, v in kwargs.iteritems())
+        if type(defaults) == model:
+            defaults = model.__marshmallow__().dump(defaults).data
         params.update(defaults or {})
         instance = model(**params)
         session.add(instance)

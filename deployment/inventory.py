@@ -5,125 +5,244 @@ import json
 from logging import getLogger
 import re
 import requests
+import time
+import urllib3
 
 from . import database, samodels as m
 from .HMAClib import HMAC
 
+from Queue import PriorityQueue, Empty
+from sqlalchemy import not_
+
 logger = getLogger(__name__)
 
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class InventoryHost(object):
+    cluster_queue = PriorityQueue(maxsize=0)
+    block = False
 
-    def __init__(self, config):
-        self.host = config["inventory.api_host"]
+    def __init__(self, host, hmac_key, hmac_inventory_username, hmac_local_username):
+        self.last_remote_update = None
+        self.last_update = None
+        self.host = host
         # TODO : enable other token generation
-        self.hmac_key = config["inventory.hmac_key"]
-        self.hmac_username = config["inventory.hmac_username"]
+        self.hmac_key = hmac_key
+        self.hmac_inventory_username = hmac_inventory_username
+        self.hmac_local_username = hmac_local_username
 
     def get_hmac_token(self):
-        # TODO : import hmac script
-        hmac = HMAC(self.hmac_username, self.hmac_key)
+        hmac = HMAC(self.hmac_inventory_username, self.hmac_key)
         hmac_token = hmac.generate_authtoken()
         return hmac_token
 
-    def get_servers_by_zone_and_tag_id(self, zone, tag):
-        hmac_token = self.get_hmac_token()
-        servers = requests.get("%s/api/search/server?zone_name=%s&tag_name=%s" % (self.host, zone, tag), headers={"X-Auth": hmac_token}, verify=False)
-        ret = servers.text.split(" ")
-        if ret == ['']:
-            ret = []
-        return ret
+    def check_hmac_token(self, token):
+        hmac = HMAC(self.hmac_local_username, self.hmac_key)
+        is_valid = hmac.check_authtoken(token)
+        return is_valid
 
-    def get_tags_by_name_and_zone(self, zone, name, with_completion=False):
+    def check_last_update(self):
         hmac_token = self.get_hmac_token()
-        tags = requests.get("%s/api/search/tags?zone_name=%s&tag_name=%s&with_auto_completion=%s" % (self.host, zone, name, str(with_completion)), headers={"X-Auth": hmac_token}, verify=False)
+        res = requests.get("{}/api/last_update".format(self.host), headers={"X-Auth": hmac_token}, verify=False)
         try:
-            ret = tags.json()
+            payload = res.json()
+            if "last_update" not in payload:
+                raise ValueError("bad response from inventory")
+            hash = payload["last_update"].encode('utf8')
+            if hash != self.last_update:
+                return hash
+            else:
+                return None
         except Exception as e:
-            print("RAW:", tags, tags.text)
-            # raise e
-        return ret
+            print e.message
+            pass  # TODO : handle errors
 
-    def find_cluster(self, cluster_name, zone_name, auto):
-        results = self.get_tags_by_name_and_zone(zone_name, cluster_name, auto)
-        if len(results) == 0:
-            return {}
-        clusters = []
-        for id, metadata in results.iteritems():
-            if re.match(r"^\d+$", id is None):
-                return []  # return error or drop this one ?
-            if "cluster_name" not in metadata:
-                continue # or return error ?
-            clusters.append(m.Cluster(distant_id=id, name=metadata["cluster_name"], zone=zone_name))
+    def update_remote_timestamp(self, ts):
+        self.last_remote_update = ts
 
-        return clusters
+    def update_timestamp(self):
+        if self.last_remote_update != self.last_update:
+            self.last_update = self.last_remote_update
+            logger.info("[InventoryHost] local hash updated and up to date with inventory")
 
-    def get_cluster(self, distant_id, zone_name):
-        cluster = self.get_servers_by_zone_and_tag_id(zone_name, distant_id) # change this method above
-        if len(cluster) == 0:
-            return None, []
-        servers = []
-        if "hosts" in cluster:
-            for server in cluster["hosts"]:
-                servers.append(m.Server(distant_id= server["id"], name=server["name"]))
-        cluster = m.Cluster(name=distant_id, zone=zone_name)
-        return cluster, servers
+    def get_clusters(self):
+        hmac_token = self.get_hmac_token()
+        clusters_json = requests.get("{}/api/clusters".format(self.host), headers={"X-Auth": hmac_token}, verify=False)
+        print clusters_json
+        try:
+            clusters = clusters_json.json()
+            if 'clusters' not in clusters:
+                raise Exception('No data returned from inventory')
+            i = 0;
+            for cluster in clusters['clusters']:
+                cluster['inventory_key'] = cluster['id']
+                cluster['id'] = i
+                i += 1
+                for server in cluster['servers']:
+                    server['inventory_key'] = server['id']
+            return clusters['clusters']
+        except Exception as e:
+            print e.message
+            print clusters_json.text
+            return None
+            #TODO: handle errors
 
+    def get_cluster(self, inventory_key):
+        hmac_token = self.get_hmac_token()
+        raw = requests.get("%s/api/cluster/%s" % (self.host, inventory_key),
+                               headers={"X-Auth": hmac_token}, verify=False)
+        try:
+            res = raw.json()
+            print res
+            if res['status'] > 0 or len(res['cluster']) == 0 :
+                return None, []
+            cluster = res['cluster']
+            servers = []
+            if "servers" in cluster:
+                for server in cluster["servers"]:
+                    servers.append(m.Server(inventory_key=server["id"], name=server["name"], activated=server["status"]))
+            cluster = m.Cluster(inventory_key=inventory_key, name=cluster['name'])
+            return cluster, servers
+        except Exception as e:
+            print e.message
+            pass  # TODO : handle errors
 
-def get_cluster(inventory_host, zone_name, distant_id):
-    cluster = inventory_host.get_servers_by_zone_and_tag_id(zone_name, distant_id)
-    if len(cluster) == 0:
-        return {}, {}
-    servers = []
-    for server in cluster:
-        servers.append(m.Server(name=server))
-    cluster = m.Cluster(name=distant_id, zone=zone_name)
-    return cluster, servers
+    def add_cluster_to_update(self, cluster_info, priority):
+        self.cluster_queue.put((priority, cluster_info))
 
-
-def format_name(name_str):
-    return re.sub(r'[\n\t\'\"\s]*', '', name_str)
-
-
-def update_environment_clusters(inventory_host, environment_id):
-    with database.session_scope() as session:
-        clusters = session.query(m.Environment).filter(m.Environment.id == environment_id).one_or_none().clusters
-        for cluster in clusters:
-            logger.debug(cluster.name)
-            distant_hosts = inventory_host.get_servers_by_zone_and_tag_id(cluster.zone, cluster.distant_id)
-            logger.debug(distant_hosts)
-            up_to_date = compare_cluster(distant_hosts, cluster.id)
-            if not up_to_date:
-                update_cluster(distant_hosts, cluster.id)
-    logger.debug("ceci est un premier test")
-
-
-def compare_cluster(hosts, cluster_id):
-    if len(hosts) == 0:
-        return False
-    with database.session_scope() as session:
-        actual_hosts = session.query(m.Cluster)\
-            .filter(m.ClusterServerAssociation.cluster_id == cluster_id).all()
-        deployer_hosts = [elem.name for elem in actual_hosts]
-        if len(hosts) != len(deployer_hosts):
-            return False
-        for host_name in hosts:
-            if host_name not in deployer_hosts:
-                return False
+    def get_cluster_to_update(self, block=False, timeout=0):
+        if self.block is False:
+            return self.cluster_queue.get(block=block, timeout=timeout)
         else:
+            raise Empty
+
+    def block_update(self, is_blocked):
+        self.block = is_blocked
+
+    def is_blocked(self):
+        return self.block
+
+
+class AsyncInventoryWorker(object):
+    """DESCRIPTION HERE."""
+
+    refresh_duration = 2
+
+    def __init__(self, inventory_host):
+        self._running = True
+        self.inventory_host = inventory_host
+
+    def start(self):
+        while self._running:
+            try:
+                if self.inventory_host.is_blocked():
+                    time.sleep(self.refresh_duration)
+                    continue
+                try:
+                    _, cluster_id = self.inventory_host.get_cluster_to_update(block=True,
+                                                                                timeout=self.refresh_duration)
+                except Empty:
+                    self.inventory_host.update_timestamp()
+                    continue
+                updated = self.update_cluster(cluster_id)
+                if updated:
+                    logger.info("cluster id:{} updated form inventory".format(cluster_id))
+                else:
+                    logger.error("[AsyncInventoryWorker] error in update of cluster id:{}".format(cluster_id))
+            except Exception:
+                logger.exception("[AsyncInventoryWorker] unhandled error when updating cluster: ")
+
+    def stop(self):
+        self._running = False
+
+    @property
+    def name(self):
+        return "async-inventory-updater"
+
+    def update_cluster(self, cluster_id):
+        try:
+            with database.session_scope() as session:
+                cluster = session.query(m.Cluster).get(cluster_id)
+                if cluster is None:
+                    logger.error("[AsyncInventoryWorker] error when updating cluster, cluster {} not found in db".format(cluster_id))
+                    return False
+                distant_cluster, servers = self.inventory_host.get_cluster(cluster.inventory_key)
+                logger.info("updating cluster {}".format(cluster.name))
+                if distant_cluster is None:
+                    if len(servers) == 0:
+                        pass
+                        return False # todo : switch to integer status
+                        #self.delete_cluster(cluster_id)
+                    else:
+                        return False
+                        # TODO: log error
+                cluster_servers = {}
+                for server_asso in cluster.servers:
+                    cluster_servers[server_asso.server_def.inventory_key] = server_asso
+                for distant_server in servers:
+                    created = False
+                    server = session.query(m.Server).filter_by(inventory_key=distant_server.inventory_key).one_or_none()
+                    if server is None:
+                        # get_or_create only for transition: find servers without inventory_key
+                        server, created = database.get_or_create(session, m.Server, distant_server,
+                                                             name=distant_server.name)
+                    if not created:
+                        server.inventory_key = distant_server.inventory_key
+                        server.name = distant_server.name
+                        server.activated = distant_server.activated
+                    else:
+                        logger.info("server {} created from inventory".format(server.name))
+                    if server.inventory_key in cluster_servers:
+                        cluster_servers.pop(server.inventory_key)
+                    else:
+                        m.ClusterServerAssociation(cluster_def=cluster, server_def=server)
+                        logger.info("server {} added in cluster {}".format(server.name, cluster.name))
+
+                for _, asso in cluster_servers.iteritems():
+                    name = asso.server_def.name
+                    session.delete(asso)
+                    logger.info("server {} was remove of cluster {}".format(name, cluster.name))
             return True
+        except Exception as e:
+            logger.exception('[AsyncInventoryWorker] '+e.message)
+            return False
 
 
-def update_cluster(inventory_hosts, cluster_id):
-    for host in inventory_hosts:
-        with database.session_scope() as session:
-            server, created = database.get_or_create(session, m.Server, defaults={"activated": True, "port":22}, name=host)
-            logger.debug("server %s was %s" %(server.name, "added" if created else "already in db"))
+class InventoryWorker(object):
+    """DESCRIPTION HERE."""
 
-            # create clusters_servers associatation
-            defaults = {
-                "haproxy_key":None
-            }
-            association, created = database.get_or_create(session, m.ClusterServerAssociation, defaults, cluster_id=cluster_id, server_def=server)
-            logger.debug("server %s was %s cluster %s" %(server.name, "added to" if created else "already in", association.cluster_id))
-            session.add(association)
+    def __init__(self, inventory_host, frequency):
+        self._running = True
+        self.inventory_host = inventory_host
+        self.steps = int(frequency*60/5)
+
+    def start(self):
+        self._running = True
+        while self._running:
+            try:
+                # TODO : check any deployment is running
+                logger.info("[inventory-synchronizer] inventory worker waked up")
+                last_update = self.inventory_host.check_last_update()
+                if last_update is not None:
+                    logger.info("[inventory-synchronizer] deployer [{}] : inventory [{}]".format(self.inventory_host.last_remote_update, last_update))
+                    with database.session_scope() as session:
+                        clusters = session.query(m.Cluster).filter(m.Cluster.inventory_key != None).all()
+                        logger.info("[inventory-synchronizer] updating {} clusters...".format(len(clusters)))
+                        for cluster in clusters:
+                            self.inventory_host.add_cluster_to_update(cluster.id, 2)
+                    self.inventory_host.update_remote_timestamp(last_update)
+                else:
+                    logger.info("[inventory-synchronizer] up to date, inventory hash: {}".format(self.inventory_host.last_remote_update))
+            except Exception as e:
+                logger.error(e)
+            for i in range(self.steps):
+                if self._running is False:
+                    break
+                time.sleep(5)
+
+    def stop(self):
+        self._running = False
+
+    @property
+    def name(self):
+        return "inventory-synchronizer"
