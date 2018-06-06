@@ -11,39 +11,36 @@ import urllib3
 from . import database, samodels as m
 from .HMAClib import HMAC
 
-from Queue import PriorityQueue, Empty
-from sqlalchemy import not_
+try:
+    from queue import PriorityQueue, Empty
+except ImportError:
+    from Queue import PriorityQueue, Empty
 
 logger = getLogger(__name__)
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+UPDATE_QUEUE = PriorityQueue(maxsize=0)
+
+
+def add_cluster_to_update(cluster_id, priority):
+    UPDATE_QUEUE.put((priority, cluster_id))
+
+
+# TODO : enable routes customization ?
 class InventoryHost(object):
     cluster_queue = PriorityQueue(maxsize=0)
     block = False
 
-    def __init__(self, host, hmac_key, hmac_inventory_username, hmac_local_username):
+    def __init__(self, host, authentificator):
         self.last_remote_update = None
         self.last_update = None
         self.host = host
-        # TODO : enable other token generation
-        self.hmac_key = hmac_key
-        self.hmac_inventory_username = hmac_inventory_username
-        self.hmac_local_username = hmac_local_username
-
-    def get_hmac_token(self):
-        hmac = HMAC(self.hmac_inventory_username, self.hmac_key)
-        hmac_token = hmac.generate_authtoken()
-        return hmac_token
-
-    def check_hmac_token(self, token):
-        hmac = HMAC(self.hmac_local_username, self.hmac_key)
-        is_valid = hmac.check_authtoken(token)
-        return is_valid
+        self.authentificator = authentificator
 
     def check_last_update(self):
-        hmac_token = self.get_hmac_token()
-        res = requests.get("{}/api/last_update".format(self.host), headers={"X-Auth": hmac_token}, verify=False)
+        hmac_header = self.authentificator.get_token_header()
+        res = requests.get("{}/api/last_update".format(self.host), headers=hmac_header, verify=False)
         try:
             payload = res.json()
             if "last_update" not in payload:
@@ -66,9 +63,8 @@ class InventoryHost(object):
             logger.info("[InventoryHost] local hash updated and up to date with inventory")
 
     def get_clusters(self):
-        hmac_token = self.get_hmac_token()
-        clusters_json = requests.get("{}/api/clusters".format(self.host), headers={"X-Auth": hmac_token}, verify=False)
-        print clusters_json
+        hmac_header = self.authentificator.get_token_header()
+        clusters_json = requests.get("{}/api/clusters".format(self.host), headers=hmac_header, verify=False)
         try:
             clusters = clusters_json.json()
             if 'clusters' not in clusters:
@@ -88,12 +84,11 @@ class InventoryHost(object):
             #TODO: handle errors
 
     def get_cluster(self, inventory_key):
-        hmac_token = self.get_hmac_token()
+        hmac_header = self.authentificator.get_token_header()
         raw = requests.get("%s/api/cluster/%s" % (self.host, inventory_key),
-                               headers={"X-Auth": hmac_token}, verify=False)
+                               headers=hmac_header, verify=False)
         try:
             res = raw.json()
-            print res
             if res['status'] > 0 or len(res['cluster']) == 0 :
                 return None, []
             cluster = res['cluster']
@@ -106,15 +101,6 @@ class InventoryHost(object):
         except Exception as e:
             print e.message
             pass  # TODO : handle errors
-
-    def add_cluster_to_update(self, cluster_info, priority):
-        self.cluster_queue.put((priority, cluster_info))
-
-    def get_cluster_to_update(self, block=False, timeout=0):
-        if self.block is False:
-            return self.cluster_queue.get(block=block, timeout=timeout)
-        else:
-            raise Empty
 
     def block_update(self, is_blocked):
         self.block = is_blocked
@@ -131,6 +117,7 @@ class AsyncInventoryWorker(object):
     def __init__(self, inventory_host):
         self._running = True
         self.inventory_host = inventory_host
+        self.block = False # TODO : check all deployments in progress
 
     def start(self):
         while self._running:
@@ -139,25 +126,29 @@ class AsyncInventoryWorker(object):
                     time.sleep(self.refresh_duration)
                     continue
                 try:
-                    _, cluster_id = self.inventory_host.get_cluster_to_update(block=True,
-                                                                                timeout=self.refresh_duration)
+                    _, cluster_id = self.get_cluster_to_update(block=True, timeout=self.refresh_duration)
                 except Empty:
                     self.inventory_host.update_timestamp()
                     continue
                 updated = self.update_cluster(cluster_id)
-                if updated:
+                if updated == 0:
                     logger.info("cluster id:{} updated form inventory".format(cluster_id))
-                else:
+                elif updated == 1:
+                    logger.info("cluster id:{} deleted".format(cluster_id))
+                elif updated == 2:
                     logger.error("[AsyncInventoryWorker] error in update of cluster id:{}".format(cluster_id))
-            except Exception:
+                    # TODO: log error or send mail or whatever (see notification object)
+            except:
                 logger.exception("[AsyncInventoryWorker] unhandled error when updating cluster: ")
 
     def stop(self):
         self._running = False
 
-    @property
-    def name(self):
-        return "async-inventory-updater"
+    def get_cluster_to_update(self, block=False, timeout=0):
+        if self.block is False:
+            return UPDATE_QUEUE.get(block=block, timeout=timeout)
+        else:
+            raise Empty
 
     def update_cluster(self, cluster_id):
         try:
@@ -165,17 +156,21 @@ class AsyncInventoryWorker(object):
                 cluster = session.query(m.Cluster).get(cluster_id)
                 if cluster is None:
                     logger.error("[AsyncInventoryWorker] error when updating cluster, cluster {} not found in db".format(cluster_id))
-                    return False
+                    return 2
                 distant_cluster, servers = self.inventory_host.get_cluster(cluster.inventory_key)
                 logger.info("updating cluster {}".format(cluster.name))
                 if distant_cluster is None:
                     if len(servers) == 0:
-                        pass
-                        return False # todo : switch to integer status
-                        #self.delete_cluster(cluster_id)
+                        for asso in cluster.servers:
+                            session.delete(asso)
+                        session.commit()
+                        for asso in cluster.environments:
+                            session.delete(asso)
+                        session.commit()
+                        session.delete(cluster)
+                        return 1
                     else:
-                        return False
-                        # TODO: log error
+                        return 2
                 cluster_servers = {}
                 for server_asso in cluster.servers:
                     cluster_servers[server_asso.server_def.inventory_key] = server_asso
@@ -202,10 +197,14 @@ class AsyncInventoryWorker(object):
                     name = asso.server_def.name
                     session.delete(asso)
                     logger.info("server {} was remove of cluster {}".format(name, cluster.name))
-            return True
+            return 0
         except Exception as e:
             logger.exception('[AsyncInventoryWorker] '+e.message)
-            return False
+            return 2
+
+    @property
+    def name(self):
+        return "async-inventory-updater"
 
 
 class InventoryWorker(object):
@@ -229,7 +228,7 @@ class InventoryWorker(object):
                         clusters = session.query(m.Cluster).filter(m.Cluster.inventory_key != None).all()
                         logger.info("[inventory-synchronizer] updating {} clusters...".format(len(clusters)))
                         for cluster in clusters:
-                            self.inventory_host.add_cluster_to_update(cluster.id, 2)
+                            add_cluster_to_update(cluster.id, 2)
                     self.inventory_host.update_remote_timestamp(last_update)
                 else:
                     logger.info("[inventory-synchronizer] up to date, inventory hash: {}".format(self.inventory_host.last_remote_update))

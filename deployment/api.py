@@ -16,29 +16,17 @@ from bottle import route, hook, request, abort, error, \
     post, delete, get, put, default_app, static_file
 from bottle.ext import sqlalchemy as sabottle
 from . import execution, worker, authorization,\
-    gitutils, websocket, executils, database
+    gitutils, websocket, executils, database, inventory
 from . import samodels as m, schemas
 from .auth import issue_token, InvalidSession, NoMatchingUser, hash_token
 
 from sqlalchemy import orm
 
 from . import inventory
-from .HMAClib import HMAC
 
 logger = getLogger(__name__)
 
 # FIXME: abstract away the "return json..." with a helper
-inv_host = None
-
-
-def with_inventory(param):
-    def decorator(func):
-        global inv_host
-        def wrapper(*args, **kwargs):
-            kwargs[param] = inv_host
-            return func(*args, **kwargs)
-        return wrapper
-    return decorator
 
 
 def enforce(permission):
@@ -90,14 +78,15 @@ def _expunge_user(user, session):
         session.expunge(role)
     session.expunge(user)
 
-def decode_hmac(inv_host, request):
-    token = request.get_header('X-Auth')
-    if token is None:
-        abort(403, "forbidden : no token provided")
-    is_valid = inv_host.check_hmac_token(token)
-    if not is_valid:
-        abort(403, "forbidden : invalid or expired token")
-    return True
+
+def requires_inventory_auth(decorated):
+    def out(*args, **kwargs):
+        validity = default_app().config["deployer.inventory_auth"].check_auth_token(request)
+        if validity is False:
+            abort(403, "forbidden : wrong token or no token provided")
+        else:
+            return decorated(*args, **kwargs)
+    return out
 
 
 @hook('before_request')
@@ -529,8 +518,8 @@ def account_get(db):
 
 @get('/api/inventory_clusters')
 @requires_admin
-@with_inventory('inv_host')
-def inventory_cluster_get(db, inv_host=None):
+def inventory_cluster_get(db):
+    inv_host = default_app().config["deployer.inventory"]
     if inv_host is not None:
         clusters = inv_host.get_clusters()
         if clusters is None:
@@ -542,11 +531,9 @@ def inventory_cluster_get(db, inv_host=None):
 
 @post('/api/inventory_clusters')
 @requires_admin
-@with_inventory('inv_host')
-def inventory_cluster_post(db, inv_host=None):
+def inventory_cluster_post(db):
+    inv_host = default_app().config["deployer.inventory"]
     if inv_host is not None:
-        print request.json
-        # TODO : create add route
         cluster_raw = request.json
         if 'haproxy_host' not in cluster_raw or 'servers' not in cluster_raw or 'inventory_key' not in cluster_raw:
             abort(400, 'missing parameter(s)')
@@ -565,6 +552,7 @@ def inventory_cluster_post(db, inv_host=None):
                         db_server.port = 22
                     else:
                         db_server.inventory_key = server.inventory_key
+                        db_server.activated = server.activated
             else:
                 db_server.name = server.name
                 db_server.activated = server.activated
@@ -580,7 +568,6 @@ def inventory_cluster_post(db, inv_host=None):
             db.add(cluster)
             db.commit()
         except Exception as e:
-            print e.message
             db.rollback()
             abort(500)
         return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
@@ -590,25 +577,22 @@ def inventory_cluster_post(db, inv_host=None):
 
 
 @post('/api/clusters/update')
-#@require something ?
-@with_inventory('inv_host')
-def inventory_update_hook(db, inv_host=None):
+@requires_inventory_auth
+def inventory_update_hook(db):
+    inv_host = default_app().config["deployer.inventory"]
     if inv_host is not None:
-        # decode hmac
-        if decode_hmac(inv_host, request):
-            update_def = request.json
-            print update_def
-            try:
-                if 'clusters' in update_def:
-                    for cluster in update_def['clusters']:
-                        cluster_db = db.query(m.Cluster).filter_by(inventory_key=cluster).one_or_none()
-                        if cluster_db is None:
-                            continue
-                        inv_host.add_cluster_to_update(cluster_db.id, 0)
-                if 'last_update' in update_def:
-                    inv_host.update_remote_timestamp(update_def['last_update'].encode('utf8'))
-            except:
-                abort(400, "wrong update data")
+        update_def = request.json
+        try:
+            if 'clusters' in update_def:
+                for cluster in update_def['clusters']:
+                    cluster_db = db.query(m.Cluster).filter_by(inventory_key=cluster).one_or_none()
+                    if cluster_db is None:
+                        continue
+                    inventory.add_cluster_to_update(cluster_db.id, 0)
+            if 'last_update' in update_def:
+                inv_host.update_remote_timestamp(update_def['last_update'].encode('utf8'))
+        except:
+            abort(400, "wrong update data")
     else:
         return json.dumps({})
 
@@ -664,8 +648,8 @@ def clusters_delete(cluster_id, db):
 
 @put('/api/clusters/<cluster_id:int>')
 @requires_admin
-@with_inventory('inv_host')
-def cluster_put(cluster_id, db, inv_host=None):
+def cluster_put(cluster_id, db):
+    inv_host = default_app().config["deployer.inventory"]
     try:
         inv_host.block_update(True)
         cluster = db.query(m.Cluster).get(cluster_id)
@@ -1036,6 +1020,7 @@ class LoggingWSGIRequestHandler(WSGIRequestHandler):
             )
         )
 
+
 # TODO: do not spawn the API ourselves ; instead, create an application.wsgi file defining
 # the WSGI app and let Apache or some other webserver serve it
 # TODO: or at least, use a better webserver than the standard WSGIServer
@@ -1043,7 +1028,7 @@ class ApiWorker(object):
 
     # TODO: use our own config everywhere, do not rely on Bottle for that
     # (eg pass only the config object)
-    def __init__(self, config_path, config, notifier, websocket_notifier, authentificator, health, inventory_host=None):
+    def __init__(self, config_path, config, notifier, websocket_notifier, authentificator, health, inventory_auth=None, inventory_host=None):
         app = bottle.app()
         app.config.load_config(config_path)
         engine = database.engine()
@@ -1068,12 +1053,11 @@ class ApiWorker(object):
         app.config["deployer.bcrypt_log_rounds"] = 12
         app.config["deployer.authentificator"] = authentificator
         app.config["health"] = health
+        app.config["deployer.inventory"] = inventory_host
+        app.config["deployer.inventory_auth"] = inventory_auth
         self.httpd = make_server("0.0.0.0", config.getint('general', 'api_port'), app,
                                  server_class=ThreadingWSGIServer,
                                  handler_class=LoggingWSGIRequestHandler)
-
-        global inv_host
-        inv_host = inventory_host
 
     def _check_for_index_html(self, app):
         index_path = os.path.abspath(os.path.join(app.config['general.web_path'], "html", "index.html"))

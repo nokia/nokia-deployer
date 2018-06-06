@@ -69,6 +69,9 @@ class Dummy(object):
     def authentificator(self):
         return DummyAuthentificator()
 
+    def inventory_authentificator(self):
+        return DummyInventoryAuthentificator()
+
 
 class DummyAuthentificator(object):
     """This object implements methods to get an user from a token (password) or a sessionid."""
@@ -126,3 +129,40 @@ class DummyAuthentificator(object):
         if user is None or not check_hash(token, user.auth_token):
             raise NoMatchingUser()
         return user
+
+
+class DummyInventoryAuthentificator(object):
+    """
+    This object implements methods to get a valid token for the inventory
+    and to check validity of token of incoming requests from the inventory.
+    """
+
+    def get_token_header(self):
+        """
+        method called by the inventoryHost object to build a request for the inventory
+        It generates the auth token accepted by the inventory
+
+        returns:
+            a HTTP header line formatted in python object
+
+        Dummy:
+            no auth token
+        """
+        return {}
+
+    def check_auth_token(self, request):
+        """
+        check if the emitter of a hook notification has the rights to do it
+        this method gets the request object to extract the headers needed
+
+        returns:
+            True if the auth is good
+            False if there is no auth token or if the auth is not valid
+
+        Dummy:
+            no auth needed, always returns True (except in case of null request object)
+        """
+        if request is None:
+            return False
+        else:
+            return True
