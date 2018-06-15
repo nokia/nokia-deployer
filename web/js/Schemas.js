@@ -6,6 +6,7 @@ export const environment = new Schema('environments');
 export const serverAssociation = new Schema('serverAssociations');
 export const server = new Schema('servers');
 export const cluster = new Schema('clusters');
+export const inventory_cluster = new Schema('inventory_cluster');
 export const role = new Schema('roles');
 export const user = new Schema('users');
 export const deployment = new Schema('deployments');
@@ -28,6 +29,10 @@ environment.define({
 
 cluster.define({
     servers: arrayOf(serverAssociation)
+});
+
+inventory_cluster.define({
+    servers: arrayOf(server)
 });
 
 serverAssociation.define({

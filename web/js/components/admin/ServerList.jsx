@@ -17,6 +17,7 @@ const ServerList = React.createClass({
         serversById: ImmutablePropTypes.mapOf(
             ImmutablePropTypes.contains({
                 id: React.PropTypes.number.isRequired,
+                inventoryKey: React.PropTypes.string,
                 name: React.PropTypes.string.isRequired
             })
         ),
@@ -65,14 +66,14 @@ const ServerList = React.createClass({
                             <td>{server.get('id')}</td>
                             <td>
                                 <div className="btn-group">
-                                    <Link className="btn btn-default btn-sm" to={`/admin/servers/${server.get('id')}/edit`}>Edit</Link>
+                                    <Link className="btn btn-default btn-sm" to={`/admin/servers/${server.get('id')}/edit`} disabled={this.isInventoryServer(server)}>Edit</Link>
                                     <Link className="btn btn-default btn-sm" to={`/admin/servers/${server.get('id')}/releases`}>View releases</Link>
                                     {server.get("activated") ?
-                                        <button onClick={that.toggleServerActivation(server)} className="btn btn-warning btn-sm" type="button">Deactivate</button>
+                                        <button onClick={that.toggleServerActivation(server)} className="btn btn-warning btn-sm" type="button" disabled={this.isInventoryServer(server)}>Deactivate</button>
                                         :
-                                        <button onClick={that.toggleServerActivation(server)} className="btn btn-default btn-sm" type="button">Activate</button>
+                                        <button onClick={that.toggleServerActivation(server)} className="btn btn-default btn-sm" type="button" disabled={this.isInventoryServer(server)}>Activate</button>
                                     }
-                                    <button onClick={that.deleteServer(server)} className="btn btn-danger btn-sm" type="button">Delete</button>
+                                    <button onClick={that.deleteServer(server)} className="btn btn-danger btn-sm" type="button" disabled={this.isInventoryServer(server)}>Delete</button>
                                 </div>
                             </td>
                         </tr>).toList()
@@ -82,6 +83,9 @@ const ServerList = React.createClass({
                 <ConfirmationDialog ref="confirmationDialog" />
             </div>
         );
+    },
+    isInventoryServer(server) {
+      return server.get('inventoryKey') != null;
     },
     deleteServer(server) {
         const that = this;

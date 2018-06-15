@@ -105,6 +105,7 @@ function serversByIdReducer(state = Map(), action) {
         Object.values(action.payload.entities.servers).map(server => {
             state = state.mergeDeepIn([server.id], Map({
                 status: server.status,
+                inventoryKey: server.inventory_key,
                 name: server.name,
                 port: server.port,
                 id: server.id,
@@ -169,13 +170,48 @@ function clusterFromPayload(payload, associations) {
     const state = Map({
         'id': payload.id,
         'name': payload.name,
+        'inventoryKey': payload.inventory_key,
         'haproxyHost': payload.haproxy_host,
+        'haproxyBackend': payload.haproxy_backend, 
         'servers': Immutable.List(payload.servers.map(association_id => Map({
             'serverId': associations[association_id].server,
             'haproxyKey': associations[association_id].haproxy_key
         }))
         )
     });
+    return state;
+}
+
+function inventoryClustersByIdReducer(state = Map(), action) {
+    switch(action.type) {
+      case 'LOAD_INVENTORY_CLUSTERS':
+      // default:
+          if(action.payload.status != 'SUCCESS') {
+              break;
+          }
+          if(!action.payload.entities.inventory_cluster) {
+              // TODO: the real solution would be to figure out how to force
+              // normalizr to create empty arrays instead
+              break;
+          }
+
+          Object.values(action.payload.entities.inventory_cluster).map(cluster => {
+              const clusterData = Map({
+                  'id': cluster.id,
+                  'inventory_key': cluster.inventory_key,
+                  'name': cluster.name,
+                  'haproxyHost': '',
+                  'servers': Immutable.List(cluster.servers.map(server_id => Map({
+                      'inventory_key': action.payload.entities.servers[server_id].inventory_key,
+                      'name': action.payload.entities.servers[server_id].name,
+                  }))
+                  )
+              });
+
+              state = state.mergeIn([cluster.id], clusterData);
+          });
+          break;
+    }
     return state;
 }
 
@@ -442,6 +478,7 @@ const appReducer = combineReducers({
     deploymentsById: deploymentsByIdReducer,
     user: userReducer,
     routing: routeReducer,
+    inventoryClustersById: inventoryClustersByIdReducer,
     clustersById: clustersByIdReducer,
     serversById: serversByIdReducer,
     alertsById: alertsByIdReducer,

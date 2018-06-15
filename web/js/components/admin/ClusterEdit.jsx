@@ -2,6 +2,7 @@
 import React from 'react';
 import ImmutablePropTypes from 'react-immutable-proptypes';
 import PureRenderMixin from 'react-addons-pure-render-mixin';
+import {Link} from 'react-router';
 import ClusterForm from './forms/ClusterForm.jsx';
 import * as Actions from '../../Actions';
 
@@ -13,7 +14,9 @@ const ClusterEdit = React.createClass({
         cluster: ImmutablePropTypes.contains({
             id: React.PropTypes.number.isRequired,
             name: React.PropTypes.string.isRequired,
+            inventoryKey: React.PropTypes.string,
             haproxyHost: React.PropTypes.string,
+            haproxyBackend: React.PropTypes.string,
             servers: ImmutablePropTypes.listOf(
                 ImmutablePropTypes.contains({
                     haproxyKey: React.PropTypes.string,
@@ -34,17 +37,26 @@ const ClusterEdit = React.createClass({
         return (
             <div>
                 <h2>Edit Cluster</h2>
-                <ClusterForm cluster={this.props.cluster} ref="clusterForm" onSubmit={this.editCluster} serversById={this.props.serversById} />
-                <div className="row">
-                    <div className="col-sm-offset-2 col-sm-1">
-                        <button className="btn btn-sm btn-warning" onClick={this.reset}>Reset</button>
+                <p><Link to={"/admin/clusters/"}>back to list</Link></p>
+                {this.props.cluster.get('inventoryKey') == null ?
+                <div>
+                    <ClusterForm cluster={this.props.cluster} ref="clusterForm" onSubmit={this.editCluster} serversById={this.props.serversById} />
+                    <div className="row">
+                        <div className="col-sm-offset-2 col-sm-1">
+                            <button className="btn btn-sm btn-warning" onClick={this.reset}>Reset</button>
+                        </div>
                     </div>
                 </div>
+                :
+                <div className="row">
+                      Impossible to modify a cluster which is synchronized with the inventory
+                </div>
+                }
             </div>
         );
     },
-    editCluster(name, haproxyHost, serversHaproxy) {
-        this.props.dispatch(Actions.editCluster(this.props.cluster.get('id'), {name, haproxyHost, servers: serversHaproxy}));
+    editCluster(name, inventoryKey, haproxyHost, haproxyBackend, servers_data) {
+        this.props.dispatch(Actions.editCluster(this.props.cluster.get('id'), {name, inventoryKey, haproxyHost, haproxyBackend, servers: servers_data}));
         this.context.router.push('/admin/clusters');
     },
     reset() {

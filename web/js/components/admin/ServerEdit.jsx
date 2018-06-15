@@ -13,6 +13,7 @@ const ServerEdit = React.createClass({
     propTypes: {
         server: ImmutablePropTypes.contains({
             name: React.PropTypes.string.isRequired,
+            inventoryKey: React.PropTypes.string,
             id: React.PropTypes.number.isRequired
         }),
         dispatch: React.PropTypes.func.isRequired
@@ -24,12 +25,20 @@ const ServerEdit = React.createClass({
                 <h2>Edit Server</h2>
                 <p><Link to={"/admin/servers/"}>back to list</Link></p>
                 <h3>Server Details</h3>
+                {this.props.server.get('inventoryKey') == null ?
+                <div>
                 <ServerForm server={this.props.server} ref="serverForm" onSubmit={this.editServer}/>
                 <div className="row">
                     <div className="col-sm-offset-1 col-sm-1">
                         <button className="btn btn-sm btn-warning" onClick={this.reset}>Reset</button>
                     </div>
                 </div>
+                </div>
+                :
+                <div className="row">
+                    Impossible to modify a server linked to a synchronized cluster
+                </div>
+              }
             </div>
         );
     },
