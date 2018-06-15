@@ -5,7 +5,7 @@ import * as Actions from '../../../Actions';
 import ImmutablePropTypes from 'react-immutable-proptypes';
 import PureRenderMixin from 'react-addons-pure-render-mixin';
 import FuzzyListForm from '../../lib/FuzzyListForm.jsx';
-import FuzzyListSingleForm from '../../lib/FuzzyListSingleForm.jsx';
+import FuzzyListSelector from '../../lib/FuzzyListSelector.jsx';
 import LinkedStateMixin from 'react-addons-linked-state-mixin';
 import { List } from 'immutable';
 
@@ -35,7 +35,6 @@ const ClusterForm = React.createClass({
                 id: React.PropTypes.string.isRequired,
                 inventory_key : React.PropTypes.string.isRequired,
                 name: React.PropTypes.string.isRequired,
-                haproxyHost: React.PropTypes.string,
                 servers: ImmutablePropTypes.listOf(
                     ImmutablePropTypes.contains({
                         inventory_key: React.PropTypes.string.isRequired,
@@ -52,10 +51,8 @@ const ClusterForm = React.createClass({
         let haproxyBackend = "";
         let selectedServers = List();
         let selectedInventoryCluster = null;
-        let selectedChildren= List();
         let clusterType = "inventory";
         const haproxyKeys = {}; // map server id to server haproxyKey
-        const inventoryHaproxyKeys = {};
         const that = this;
         if(this.props.cluster) {
             clusterName = this.props.cluster.get('name');
@@ -69,7 +66,6 @@ const ClusterForm = React.createClass({
             selectedServers = this.props.cluster.get('servers').map(server => that.props.serversById.get(server.get('serverId')));
             this.props.cluster.get('servers').map(server => {
                 haproxyKeys[server.get('serverId')] = server.get('haproxyKey');
-                inventoryHaproxyKeys[server.get('serverId')] = server.get('haproxyKey');
             });
         }
         return {
@@ -78,9 +74,7 @@ const ClusterForm = React.createClass({
             haproxyBackend,
             selectedServers,
             selectedInventoryCluster,
-            selectedChildren,
             clusterType,
-            inventoryHaproxyKeys,
             haproxyKeys
         };
     },
@@ -88,12 +82,8 @@ const ClusterForm = React.createClass({
         this.setState({selectedServers: servers});
     },
     onClusterChanged(cluster) {
+      console.log('test');
         this.setState({selectedInventoryCluster: cluster});
-        if(cluster != null) {
-            this.setState({selectedChildren: cluster.get('servers').toList()});
-        } else {
-            this.setState({selectedChildren: List()});
-        }
     },
     componentWillReceiveProps(nextProps) {
         if(nextProps.cluster && (nextProps.cluster != this.props.cluster || nextProps.serversById != this.props.serversById)) {
@@ -117,33 +107,17 @@ const ClusterForm = React.createClass({
             that.setState({haproxyKeys: newHaproxyKeys});
         }
     },
-    inventoryRenderHaproxyKeyInput(server) {
-        return <input className="form-control input-sm"
-            placeholder="HAProxy key" name={`haproxy-host-${server.get('name')}`}
-            value={this.state.inventoryHaproxyKeys[server.get('inventory_key')] || ""}
-            onChange={this.inventoryOnHaproxyKeyChanged(server)} />
-    },
-    inventoryOnHaproxyKeyChanged(server) {
-        const that = this;
-        return evt => {
-            const haproxyKey = evt.target.value;
-            const newHaproxyKeys = that.state.inventoryHaproxyKeys;
-            newHaproxyKeys[server.get('inventory_key')] = haproxyKey;
-            that.setState({inventoryHaproxyKeys: newHaproxyKeys});
-        }
-    },
-    renderClusterInput(cluster) {
-        return <input className="form-control input-sm"
-            placeholder="HAProxy host" name={`haproxy-host-${cluster.get('name')}`}
-            value={this.state.haproxyHost || ""}
-            onChange={this.onHaproxyHostChanged()} />
-    },
-    onHaproxyHostChanged() {
-        const that = this;
-        return evt => {
-            const haproxyHost = evt.target.value;
-            that.setState({haproxyHost: haproxyHost});
-        }
+    renderClusterData(cluster) {
+      return (
+        <div>
+        <div className="row"> <h5>Servers :</h5> </div>
+        {cluster.get('servers').map(server =>
+            <div key={server.id} className="row">
+              <div className="col-sm-8 form-align"> {server.get('name')} </div>
+            </div>)}
+        </div>
+        );
+
     },
     render() {
         const that = this;
@@ -166,19 +140,15 @@ const ClusterForm = React.createClass({
                     <div className="form-group">
                         <label className="col-sm-2 control-label">Available clusters</label>
                         <div className="col-sm-8">
-                            <FuzzyListSingleForm
+                            <FuzzyListSelector
                                 onChange={this.onClusterChanged}
                                 elements={this.props.inventoryClustersById.toList()}
-                                selectedElement={this.state.selectedInventoryCluster}
-                                selectedChildren={this.state.selectedChildren}
-                                childElement="servers"
                                 renderElement={cluster => cluster.get('name')}
-                                renderChildElement={server => server.get('name')}
-                                placeholder="hq|mycluster-dev"
-                                renderElementForm={this.renderClusterInput}
-                                renderChildForm={this.inventoryRenderHaproxyKeyInput}
                                 compareWith={cluster => cluster.get('name')}
-                            />
+                                selectedElement={this.state.selectedInventoryCluster}
+                                placeholder="hq|my-cluster_dev"
+                                renderElementView={this.renderClusterData}
+                                />
                         </div>
                     </div>
                     <div className="form-group">
@@ -242,21 +212,12 @@ const ClusterForm = React.createClass({
       };
     },
     onInventorySubmit() {
-        const serversHaproxy = [];
-        this.state.selectedChildren.forEach(server => {
-            serversHaproxy.push({
-                inventoryKey: server.get('inventory_key'),
-                haproxyKey: (this.state.inventoryHaproxyKeys[server.get('inventory_key')] || null),
-                serverId: null
-          });
-      });
       this.props.onSubmit(
         this.state.selectedInventoryCluster.get('name'),
         this.state.selectedInventoryCluster.get('inventory_key'),
-        this.state.haproxyHost,
         null,
-        serversHaproxy
-      );
+        null,
+        []);
     },
     onSubmit() {
         const serversHaproxy = [];
@@ -267,7 +228,12 @@ const ClusterForm = React.createClass({
                 haproxyKey: (this.state.haproxyKeys[server.get('id')] || null)
             });
         });
-        this.props.onSubmit(this.state.clusterName, null, this.state.haproxyHost, this.state.haproxyBackend, serversHaproxy);
+        this.props.onSubmit(
+          this.state.clusterName,
+          null,
+          this.state.haproxyHost,
+          this.state.haproxyBackend,
+          serversHaproxy);
     }
 });
 
