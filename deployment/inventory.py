@@ -3,13 +3,13 @@
 
 import json
 from logging import getLogger
-import re
 import requests
 import time
 import urllib3
+import threading
+
 
 from . import database, samodels as m
-from .HMAClib import HMAC
 
 try:
     from queue import PriorityQueue, Empty
@@ -21,10 +21,28 @@ logger = getLogger(__name__)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 UPDATE_QUEUE = PriorityQueue(maxsize=0)
+EVENTS = {}
+lock = threading.Lock()
+
 
 
 def add_cluster_to_update(cluster_id, priority):
     UPDATE_QUEUE.put((priority, cluster_id))
+
+def add_event(id):
+    lock.acquire()
+    if id not in EVENTS:
+        EVENTS[id] = threading.Event()
+    else:
+        EVENTS[id].clear()
+    lock.release()
+    return EVENTS[id]
+
+def clear_event(id):
+    lock.acquire()
+    if id in EVENTS:
+        EVENTS[id].set()
+    lock.release()
 
 
 # TODO : enable routes customization ?
@@ -79,7 +97,6 @@ class InventoryHost(object):
             return clusters['clusters']
         except Exception as e:
             print e.message
-            print clusters_json.text
             return None
             #TODO: handle errors
 
@@ -93,18 +110,24 @@ class InventoryHost(object):
                 return None, []
             cluster = res['cluster']
             servers = []
+            haproxy_keys = {}
             if "servers" in cluster:
                 for server in cluster["servers"]:
-                    servers.append(m.Server(inventory_key=server["id"], name=server["name"], activated=server["status"]))
-            cluster = m.Cluster(inventory_key=inventory_key, name=cluster['name'])
-            return cluster, servers
+                    servers.append(m.Server(inventory_key=server["id"], name=server["name"], activated=server["activated"]))
+                    if server['haproxy_key'] == '':
+                        server['haproxy_key'] = None
+                    haproxy_keys[server['id']] = server['haproxy_key']
+            if cluster['haproxy_host'] == '':
+                cluster['haproxy_host'] = None
+            if cluster['haproxy_backend'] == '':
+                cluster['haproxy_backend'] = None
+            cluster = m.Cluster(inventory_key=inventory_key, name=cluster['name'], haproxy_host=cluster['haproxy_host'], haproxy_backend=cluster['haproxy_backend'])
+            return cluster, servers, haproxy_keys
         except Exception as e:
             print e.message
             pass  # TODO : handle errors
 
-    def block_update(self, is_blocked):
-        self.block = is_blocked
-
+    # useless for now
     def is_blocked(self):
         return self.block
 
@@ -118,27 +141,37 @@ class AsyncInventoryWorker(object):
         self._running = True
         self.inventory_host = inventory_host
         self.block = False # TODO : check all deployments in progress
+        self.errors = []
 
     def start(self):
         while self._running:
             try:
-                if self.inventory_host.is_blocked():
-                    time.sleep(self.refresh_duration)
+                _, cluster_id = self.get_cluster_to_update(block=True, timeout=self.refresh_duration)
+                if cluster_id == 0:
                     continue
-                try:
-                    _, cluster_id = self.get_cluster_to_update(block=True, timeout=self.refresh_duration)
-                except Empty:
+            except Empty:
+                if not self.errors:
                     self.inventory_host.update_timestamp()
-                    continue
+                continue
+
+            try:
                 updated = self.update_cluster(cluster_id)
                 if updated == 0:
-                    logger.info("cluster id:{} updated form inventory".format(cluster_id))
+                    logger.info("cluster id:{} updated from inventory".format(cluster_id))
+                    clear_event(cluster_id)
+                    if cluster_id in self.errors:
+                        self.errors.remove(cluster_id)
                 elif updated == 1:
                     logger.info("cluster id:{} deleted".format(cluster_id))
+                    if cluster_id in self.errors:
+                        self.errors.remove(cluster_id)
                 elif updated == 2:
                     logger.error("[AsyncInventoryWorker] error in update of cluster id:{}".format(cluster_id))
-                    # TODO: log error or send mail or whatever (see notification object)
+                    if cluster_id not in self.errors:
+                        self.errors.append(cluster_id)
             except:
+                if cluster_id not in self.errors:
+                    self.errors.append(cluster_id)
                 logger.exception("[AsyncInventoryWorker] unhandled error when updating cluster: ")
 
     def stop(self):
@@ -148,7 +181,8 @@ class AsyncInventoryWorker(object):
         if self.block is False:
             return UPDATE_QUEUE.get(block=block, timeout=timeout)
         else:
-            raise Empty
+            time.sleep(timeout)
+            return 0
 
     def update_cluster(self, cluster_id):
         try:
@@ -157,7 +191,7 @@ class AsyncInventoryWorker(object):
                 if cluster is None:
                     logger.error("[AsyncInventoryWorker] error when updating cluster, cluster {} not found in db".format(cluster_id))
                     return 2
-                distant_cluster, servers = self.inventory_host.get_cluster(cluster.inventory_key)
+                distant_cluster, servers, hap_keys = self.inventory_host.get_cluster(cluster.inventory_key)
                 logger.info("updating cluster {}".format(cluster.name))
                 if distant_cluster is None:
                     if len(servers) == 0:
@@ -171,6 +205,9 @@ class AsyncInventoryWorker(object):
                         return 1
                     else:
                         return 2
+                cluster.name = distant_cluster.name
+                cluster.haproxy_host = distant_cluster.haproxy_host
+                cluster.haproxy_backend = distant_cluster.haproxy_backend
                 cluster_servers = {}
                 for server_asso in cluster.servers:
                     cluster_servers[server_asso.server_def.inventory_key] = server_asso
@@ -188,10 +225,12 @@ class AsyncInventoryWorker(object):
                     else:
                         logger.info("server {} created from inventory".format(server.name))
                     if server.inventory_key in cluster_servers:
-                        cluster_servers.pop(server.inventory_key)
+                        current_server_asso = cluster_servers.pop(server.inventory_key)
                     else:
-                        m.ClusterServerAssociation(cluster_def=cluster, server_def=server)
+                        current_server_asso = m.ClusterServerAssociation(cluster_def=cluster, server_def=server)
                         logger.info("server {} added in cluster {}".format(server.name, cluster.name))
+                    if server.inventory_key in hap_keys:
+                        current_server_asso.haproxy_key = hap_keys[server.inventory_key]
 
                 for _, asso in cluster_servers.iteritems():
                     name = asso.server_def.name
@@ -199,7 +238,7 @@ class AsyncInventoryWorker(object):
                     logger.info("server {} was remove of cluster {}".format(name, cluster.name))
             return 0
         except Exception as e:
-            logger.exception('[AsyncInventoryWorker] '+e.message)
+            logger.exception('[AsyncInventoryWorker] '+e.message) #todo : wrong concat
             return 2
 
     @property
@@ -214,12 +253,12 @@ class InventoryWorker(object):
         self._running = True
         self.inventory_host = inventory_host
         self.steps = int(frequency*60/5)
+        self.retries = 0
 
     def start(self):
         self._running = True
         while self._running:
             try:
-                # TODO : check any deployment is running
                 logger.info("[inventory-synchronizer] inventory worker waked up")
                 last_update = self.inventory_host.check_last_update()
                 if last_update is not None:
@@ -230,8 +269,12 @@ class InventoryWorker(object):
                         for cluster in clusters:
                             add_cluster_to_update(cluster.id, 2)
                     self.inventory_host.update_remote_timestamp(last_update)
+                    if self.retries > 5:
+                        logger.info("[inventory-synchronizer] full sync often run, it might be a error with a cluster: see logs to more info.")
+                    self.retries += 1
                 else:
                     logger.info("[inventory-synchronizer] up to date, inventory hash: {}".format(self.inventory_host.last_remote_update))
+                    self.retries = 0
             except Exception as e:
                 logger.error(e)
             for i in range(self.steps):

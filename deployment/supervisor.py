@@ -140,7 +140,8 @@ class WorkerSupervisor(object):
 
         # START FEATURE FLAG: inventory
         self.inventory_host = None
-        if config.getboolean('inventory', 'activate') is True:
+        self.inventory_auth = None
+        if config.has_section('inventory') and config.getboolean('inventory', 'activate') is True:
             self.inventory_host = InventoryHost(config.get('inventory', 'api_host'), provider.inventory_authentificator())
             if config.has_option('inventory', 'update_frequency'):
                 inventory_frequency = config.getint('inventory', 'update_frequency')
@@ -151,9 +152,11 @@ class WorkerSupervisor(object):
 
             async_synchronizer = AsyncInventoryWorker(self.inventory_host)
             workers.append(async_synchronizer)
+
+            self.inventory_auth = provider.inventory_authentificator()
         # END FEATURE FLAG
 
-        api_worker = api.ApiWorker(self.config_path, config, self.notifier, websocket_notifier, provider.authentificator(), self._health, provider.inventory_authentificator(), self.inventory_host)
+        api_worker = api.ApiWorker(self.config_path, config, self.notifier, websocket_notifier, provider.authentificator(), self._health, self.inventory_auth, self.inventory_host)
         workers.append(api_worker)
 
         if config.has_option("general", "check_releases_frequency"):
