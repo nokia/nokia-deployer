@@ -78,7 +78,6 @@ class ClusterPostSchema(Schema):
         strict = True
     name = fields.String()
     haproxy_host = fields.String(missing=None)
-    haproxy_backend = fields.String(missing=None)
     servers = fields.List(fields.Nested(_InnerClusterPostSchema))
 
 

@@ -69,8 +69,7 @@ class InventoryHost(object):
             else:
                 return None
         except Exception as e:
-            print e.message
-            pass  # TODO : handle errors
+            print e.message # TODO : handle errors
 
     def update_remote_timestamp(self, ts):
         self.last_remote_update = ts
@@ -97,8 +96,7 @@ class InventoryHost(object):
             return clusters['clusters']
         except Exception as e:
             print e.message
-            return None
-            #TODO: handle errors
+            return None #TODO: handle errors
 
     def get_cluster(self, inventory_key):
         hmac_header = self.authentificator.get_token_header()
@@ -106,26 +104,18 @@ class InventoryHost(object):
                                headers=hmac_header, verify=False)
         try:
             res = raw.json()
-            if res['status'] > 0 or len(res['cluster']) == 0 :
+            if res['status'] > 0 or len(res['cluster']) == 0:
                 return None, []
             cluster = res['cluster']
             servers = []
-            haproxy_keys = {}
             if "servers" in cluster:
                 for server in cluster["servers"]:
                     servers.append(m.Server(inventory_key=server["id"], name=server["name"], activated=server["activated"]))
-                    if server['haproxy_key'] == '':
-                        server['haproxy_key'] = None
-                    haproxy_keys[server['id']] = server['haproxy_key']
-            if cluster['haproxy_host'] == '':
-                cluster['haproxy_host'] = None
-            if cluster['haproxy_backend'] == '':
-                cluster['haproxy_backend'] = None
-            cluster = m.Cluster(inventory_key=inventory_key, name=cluster['name'], haproxy_host=cluster['haproxy_host'], haproxy_backend=cluster['haproxy_backend'])
-            return cluster, servers, haproxy_keys
+            cluster = m.Cluster(inventory_key=inventory_key, name=cluster['name'])
+            return cluster, servers
         except Exception as e:
-            print e.message
-            pass  # TODO : handle errors
+            print e.message # TODO : handle errors
+            return None, None
 
     # useless for now
     def is_blocked(self):
@@ -191,10 +181,10 @@ class AsyncInventoryWorker(object):
                 if cluster is None:
                     logger.error("[AsyncInventoryWorker] error when updating cluster, cluster {} not found in db".format(cluster_id))
                     return 2
-                distant_cluster, servers, hap_keys = self.inventory_host.get_cluster(cluster.inventory_key)
+                distant_cluster, servers = self.inventory_host.get_cluster(cluster.inventory_key)
                 logger.info("updating cluster {}".format(cluster.name))
                 if distant_cluster is None:
-                    if len(servers) == 0:
+                    if servers is not None:
                         for asso in cluster.servers:
                             session.delete(asso)
                         session.commit()
@@ -229,8 +219,6 @@ class AsyncInventoryWorker(object):
                     else:
                         current_server_asso = m.ClusterServerAssociation(cluster_def=cluster, server_def=server)
                         logger.info("server {} added in cluster {}".format(server.name, cluster.name))
-                    if server.inventory_key in hap_keys:
-                        current_server_asso.haproxy_key = hap_keys[server.inventory_key]
 
                 for _, asso in cluster_servers.iteritems():
                     name = asso.server_def.name
@@ -238,7 +226,7 @@ class AsyncInventoryWorker(object):
                     logger.info("server {} was remove of cluster {}".format(name, cluster.name))
             return 0
         except Exception as e:
-            logger.exception('[AsyncInventoryWorker] '+e.message) #todo : wrong concat
+            logger.exception('[AsyncInventoryWorker] '+e.message)
             return 2
 
     @property

@@ -123,7 +123,6 @@ class Cluster(Base):
     id = sa.Column(sa.Integer(), nullable=False, primary_key=True, autoincrement=True)
     name = sa.Column(sa.String(), nullable=False, unique=True)
     haproxy_host = sa.Column(sa.String())
-    haproxy_backend = sa.Column(sa.String())
     inventory_key = sa.Column(sa.String(255), nullable=True, unique=True) #mySQL allows multiple NUll values with a UNIQUE constraint
 
     servers = orm.relationship("ClusterServerAssociation", back_populates="cluster_def")

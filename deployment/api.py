@@ -541,10 +541,8 @@ def inventory_cluster_post(db):
         cluster_raw = request.json
         if 'haproxy_host' not in cluster_raw or 'servers' not in cluster_raw or 'inventory_key' not in cluster_raw:
             abort(400, 'missing parameter(s)')
-        servers_raw = cluster_raw['servers']
-        del cluster_raw['servers']
         try:
-            cluster, servers, hap_keys = inv_host.get_cluster(cluster_raw['inventory_key'])
+            cluster, servers = inv_host.get_cluster(cluster_raw['inventory_key'])
             if cluster is None:
                 abort(400, 'inventory_key not found')
             for server in servers:
@@ -560,14 +558,7 @@ def inventory_cluster_post(db):
                 else:
                     db_server.name = server.name
                     db_server.activated = server.activated
-                asso = m.ClusterServerAssociation(cluster_def=cluster, server_def=db_server, haproxy_key=hap_keys[server.inventory_key])
-                # for key in servers_raw:
-                #     if key['inventory_key'] == server.inventory_key:
-                #         asso.haproxy_key = key['haproxy_key']
-                #         break
-                # else:
-                #     db.expunge()
-                #     abort(400, 'wrong servers parameters')
+                asso = m.ClusterServerAssociation(cluster_def=cluster, server_def=db_server)
                 cluster.servers.append(asso)
             db.add(cluster)
             db.commit()
@@ -639,9 +630,6 @@ def clusters_post(db):
         return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
     else:
         return inventory_cluster_post(db)
-        # abort(400, 'wrong route for an inventory cluster')
-        # if cluster_def['inventory_key'] is not None:
-        #     abort(400, 'wrong route for an inventory cluster')
 
 
 
