@@ -196,8 +196,6 @@ class AsyncInventoryWorker(object):
                     else:
                         return 2
                 cluster.name = distant_cluster.name
-                cluster.haproxy_host = distant_cluster.haproxy_host
-                cluster.haproxy_backend = distant_cluster.haproxy_backend
                 cluster_servers = {}
                 for server_asso in cluster.servers:
                     cluster_servers[server_asso.server_def.inventory_key] = server_asso
