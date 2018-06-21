@@ -16,7 +16,7 @@ from .log import configure_logging
 from .checkreleases import CheckReleasesWorker
 from .cleaner import CleanerWorker
 from .worker import DeployerWorker, AsyncFetchWorker
-from .inventory import InventoryHost, InventoryWorker, AsyncInventoryWorker
+from .inventory import InventoryWorker, AsyncInventoryWorker
 
 logger = getLogger(__name__)
 
@@ -142,7 +142,7 @@ class WorkerSupervisor(object):
         self.inventory_host = None
         self.inventory_auth = None
         if config.has_section('inventory') and config.getboolean('inventory', 'activate') is True:
-            self.inventory_host = InventoryHost(config.get('inventory', 'api_host'), provider.inventory_authentificator())
+            self.inventory_host = provider.inventory_host()#InventoryHost(config.get('inventory', 'api_host'), provider.inventory_authenticator())
             if config.has_option('inventory', 'update_frequency'):
                 inventory_frequency = config.getint('inventory', 'update_frequency')
             else:
@@ -153,10 +153,10 @@ class WorkerSupervisor(object):
             async_synchronizer = AsyncInventoryWorker(self.inventory_host)
             workers.append(async_synchronizer)
 
-            self.inventory_auth = provider.inventory_authentificator()
+            self.inventory_auth = provider.inventory_authenticator()
         # END FEATURE FLAG
 
-        api_worker = api.ApiWorker(self.config_path, config, self.notifier, websocket_notifier, provider.authentificator(), self._health, self.inventory_auth, self.inventory_host)
+        api_worker = api.ApiWorker(self.config_path, config, self.notifier, websocket_notifier, provider.authenticator(), self._health, self.inventory_auth, self.inventory_host)
         workers.append(api_worker)
 
         if config.has_option("general", "check_releases_frequency"):

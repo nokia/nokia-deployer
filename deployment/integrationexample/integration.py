@@ -11,10 +11,14 @@ In the deployer configuration file, add the following section to use this module
 [integration]
 provider=deployment.integrationexample.integration.Dummy
 """
+import hashlib
+import time
 
+import requests
 from deployment.artifact import NoArtifactDetected
-from deployment import samodels as m
+from deployment import samodels as m, database
 from deployment.auth import NoMatchingUser, InvalidSession, check_hash
+from deployment.inventory import InventoryError
 
 
 class Dummy(object):
@@ -25,7 +29,7 @@ class Dummy(object):
             Args:
             config (ConfigParser.ConfigParser): the parsed contents of the deployer configuration file
         """
-        pass
+        self.config = config
 
     def build_notifiers(self):
         """
@@ -66,14 +70,18 @@ class Dummy(object):
         """
         raise NoArtifactDetected()
 
-    def authentificator(self):
-        return DummyAuthentificator()
+    def inventory_host(self):
+        host = self.config.get('inventory', 'host')
+        return StandardInventoryHost(host, self.inventory_authenticator())
 
-    def inventory_authentificator(self):
-        return DummyInventoryAuthentificator()
+    def authenticator(self):
+        return DummyAuthenticator()
+
+    def inventory_authenticator(self):
+        return DummyInventoryAuthenticator()
 
 
-class DummyAuthentificator(object):
+class DummyAuthenticator(object):
     """This object implements methods to get an user from a token (password) or a sessionid."""
 
     def get_user_by_sessionid(self, sessionid, db):
@@ -131,7 +139,7 @@ class DummyAuthentificator(object):
         return user
 
 
-class DummyInventoryAuthentificator(object):
+class DummyInventoryAuthenticator(object):
     """
     This object implements methods to get a valid token for the inventory
     and to check validity of token of incoming requests from the inventory.
@@ -166,3 +174,63 @@ class DummyInventoryAuthentificator(object):
             return False
         else:
             return True
+
+
+class StandardInventoryHost(object):
+
+    def __init__(self, host, authenticator):
+        self.most_recent_version = None
+        self.host = host
+        self.authenticator = authenticator
+
+    def is_up_to_date(self):
+        self.most_recent_version = self.fetch_most_recent_version()
+        local_version = self.get_local_version()
+        if local_version == self.most_recent_version:
+            return True
+        else:
+            return False
+
+    def get_local_version(self):
+        dates_concat = ''
+        with database.session_scope() as session:
+            clusters = session.query(m.Cluster).filter(m.Cluster.inventory_key!=None).order_by(m.Cluster.inventory_key).all()
+            for cluster in clusters:
+                dates_concat += str(time.mktime(cluster.updated_at.utctimetuple()))
+        return hashlib.sha256(dates_concat).hexdigest()
+
+    def fetch_most_recent_version(self):
+        header = self.authenticator.get_token_header()
+        res = requests.get("{}/api/last_update".format(self.host), headers=header)
+        payload = res.json()
+        if "last_update" not in payload:
+            raise InventoryError("bad response from inventory")
+        return payload["last_update"]
+
+    def set_most_recent_version(self, version):
+        self.most_recent_version = version
+
+    def get_clusters(self):
+        header = self.authenticator.get_token_header()
+        clusters_json = requests.get("{}/api/clusters".format(self.host), headers=header)
+        clusters = clusters_json.json()
+        if clusters['status'] == 0:
+            return clusters['clusters']
+        else:
+            raise InventoryError('bad response from inventory')
+
+    def get_cluster(self, inventory_key):
+        header = self.authenticator.get_token_header()
+        raw = requests.get("%s/api/cluster/%s" % (self.host, inventory_key), headers=header)
+        res = raw.json()
+        if 'cluster' not in res:
+            raise InventoryError("bad response from inventory")
+        else:
+            if len(res['cluster']) == 0:
+                return 'deleted', None, None
+            else:
+                if "servers" not in res['cluster']:
+                    raise InventoryError('missing servers in payload')
+                servers = res['cluster'].pop("servers")
+                cluster = res['cluster']
+                return "existing", cluster, servers

@@ -11,7 +11,7 @@ import mock
 from bottle import request, tob, HTTPError, default_app
 
 from deployment import gitutils, database, samodels as m, api
-from deployment.integrationexample.integration import DummyAuthentificator
+from deployment.integrationexample.integration import DummyAuthenticator
 
 
 def _mocked_get_git_release(host, cmd, timeout):
@@ -33,7 +33,7 @@ class TestApi(unittest.TestCase):
         database.init_db("sqlite:////tmp/test.db")
         # Speed up tests
         default_app().config["deployer.bcrypt_log_rounds"] = 4
-        default_app().config["deployer.authentificator"] = DummyAuthentificator()
+        default_app().config["deployer.authenticator"] = DummyAuthenticator()
         database.drop_all()
         database.create_all()
         self.session = database.Session()

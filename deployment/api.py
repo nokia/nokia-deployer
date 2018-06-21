@@ -5,9 +5,7 @@ import re
 import json
 from logging import getLogger
 import datetime
-import time
 import os.path
-import threading
 from itertools import repeat
 from wsgiref.simple_server import make_server, WSGIServer, WSGIRequestHandler
 from SocketServer import ThreadingMixIn
@@ -18,7 +16,7 @@ from bottle import route, hook, request, abort, error, \
     post, delete, get, put, default_app, static_file
 from bottle.ext import sqlalchemy as sabottle
 from . import execution, worker, authorization,\
-    gitutils, websocket, executils, database, inventory
+    gitutils, websocket, executils, database
 from . import samodels as m, schemas
 from .auth import issue_token, InvalidSession, NoMatchingUser, hash_token
 
@@ -169,7 +167,7 @@ def auth_session(db):
         abort(400)
     # Check that this session is valid
     try:
-        user = default_app().config["deployer.authentificator"].get_user_by_sessionid(sessionid, db)
+        user = default_app().config["deployer.authenticator"].get_user_by_sessionid(sessionid, db)
     except InvalidSession:
         logger.info("Invalid session")
         abort(400)
@@ -186,7 +184,7 @@ def auth_token(db):
     username = request.json['username']
     token = request.json['auth_token']
     try:
-        user = default_app().config["deployer.authentificator"].get_user_by_token(username, token, db)
+        user = default_app().config["deployer.authenticator"].get_user_by_token(username, token, db)
     except NoMatchingUser:
         abort(403)
     return issue_token(user, db)
@@ -519,56 +517,56 @@ def server_put(server_id, db):
 def account_get(db):
     return json.dumps({'user': m.User.__marshmallow__().dump(request.account).data})
 
-
-@get('/api/inventory_clusters')
-@requires_admin
-def inventory_cluster_get(db):
-    inv_host = default_app().config["deployer.inventory"]
-    if inv_host is not None:
-        clusters = inv_host.get_clusters()
-        if clusters is None:
-            abort(500, 'impossible to get clusters from inventory')
-        return json.dumps({'inventory_clusters': clusters})
-    else:
-        return json.dumps({'inventory_clusters': []})
+#
+# @get('/api/inventory_clusters')
+# @requires_admin
+# def inventory_cluster_get(db):
+#     inv_host = default_app().config["deployer.inventory"]
+#     if inv_host is not None:
+#         clusters = inv_host.get_clusters()
+#         if clusters is None:
+#             abort(500, 'impossible to get clusters from inventory')
+#         return json.dumps({'inventory_clusters': clusters})
+#     else:
+#         return json.dumps({'inventory_clusters': []})
 
 
 # @post('/api/inventory_clusters')
-@requires_admin
-def inventory_cluster_post(db):
-    inv_host = default_app().config["deployer.inventory"]
-    if inv_host is not None:
-        cluster_raw = request.json
-        if 'haproxy_host' not in cluster_raw or 'servers' not in cluster_raw or 'inventory_key' not in cluster_raw:
-            abort(400, 'missing parameter(s)')
-        try:
-            cluster, servers = inv_host.get_cluster(cluster_raw['inventory_key'])
-            if cluster is None:
-                abort(400, 'inventory_key not found')
-            for server in servers:
-                db_server = db.query(m.Server).filter_by(inventory_key=server.inventory_key).one_or_none()
-                if db_server is None:
-                        # get_or_create only for transition: find servers without inventory_key
-                        db_server, created = database.get_or_create(db, m.Server, defaults=server, name=server.name)
-                        if created:
-                            db_server.port = 22
-                        else:
-                            db_server.inventory_key = server.inventory_key
-                            db_server.activated = server.activated
-                else:
-                    db_server.name = server.name
-                    db_server.activated = server.activated
-                asso = m.ClusterServerAssociation(cluster_def=cluster, server_def=db_server)
-                cluster.servers.append(asso)
-            db.add(cluster)
-            db.commit()
-        except Exception:
-            db.rollback()
-            abort(500)
-        return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
-
-    else:
-        abort(404)
+# @requires_admin
+# def inventory_cluster_post(db):
+#     inv_host = default_app().config["deployer.inventory"]
+#     if inv_host is not None:
+#         cluster_raw = request.json
+#         if 'inventory_key' not in cluster_raw:
+#             abort(400, 'missing parameter(s)')
+#         try:
+#             cluster, servers = inv_host.get_cluster(cluster_raw['inventory_key'])
+#             if cluster is None:
+#                 abort(400, 'inventory_key not found')
+#             for server in servers:
+#                 db_server = db.query(m.Server).filter_by(inventory_key=server.inventory_key).one_or_none()
+#                 if db_server is None:
+#                         # get_or_create only for transition: find servers without inventory_key
+#                         db_server, created = database.get_or_create(db, m.Server, defaults=server, name=server.name)
+#                         if created:
+#                             db_server.port = 22
+#                         else:
+#                             db_server.inventory_key = server.inventory_key
+#                             db_server.activated = server.activated
+#                 else:
+#                     db_server.name = server.name
+#                     db_server.activated = server.activated
+#                 asso = m.ClusterServerAssociation(cluster_def=cluster, server_def=db_server)
+#                 cluster.servers.append(asso)
+#             db.add(cluster)
+#             db.commit()
+#         except Exception:
+#             db.rollback()
+#             abort(500)
+#         return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
+#
+#     else:
+#         abort(404)
 
 
 @post('/api/clusters/update')
@@ -580,12 +578,9 @@ def inventory_update_hook(db):
         try:
             if 'clusters' in update_def:
                 for cluster in update_def['clusters']:
-                    cluster_db = db.query(m.Cluster).filter_by(inventory_key=cluster).one_or_none()
-                    if cluster_db is None:
-                        continue
-                    inventory.add_cluster_to_update(cluster_db.id, 0)
+                    inventory.add_cluster_to_update(cluster, 0) # max priority
             if 'last_update' in update_def:
-                inv_host.update_remote_timestamp(update_def['last_update'].encode('utf8'))
+                inv_host.is_up_to_date(update_def['last_update'])
         except:
             abort(400, "wrong update data")
     else:
@@ -609,9 +604,7 @@ def clusters_post(db):
         cluster_def = schema.load(request.json).data
         if cluster_def['haproxy_host'] == '':
             cluster_def['haproxy_host'] = None
-        if cluster_def['haproxy_backend'] == '':
-            cluster_def['haproxy_backend'] = None
-        cluster = m.Cluster(name=cluster_def['name'], haproxy_host=cluster_def['haproxy_host'], haproxy_backend=cluster_def['haproxy_backend'])
+        cluster = m.Cluster(name=cluster_def['name'], haproxy_host=cluster_def['haproxy_host'])
         servers = []
         for server in cluster_def['servers']:
             s = db.query(m.Server).get(server['server_id'])
@@ -629,7 +622,8 @@ def clusters_post(db):
         db.commit()
         return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
     else:
-        return inventory_cluster_post(db)
+        abort(400, "bad arguments")
+        # return inventory_cluster_post(db)
 
 
 
@@ -639,6 +633,8 @@ def clusters_delete(cluster_id, db):
     cluster = db.query(m.Cluster).get(cluster_id)
     if cluster is None:
         abort(404)
+    if cluster.inventory_key is not None:
+        abort(403)
     for server_asso in cluster.servers:
         db.delete(server_asso)
     db.delete(cluster)
@@ -655,8 +651,8 @@ def cluster_put(cluster_id, db):
     # WITH INVENTORY : pull cluster's data from the inventory
     if cluster.inventory_key is not None:
         if inv_host is not None:
-            e = inventory.add_event(cluster_id)
-            inventory.add_cluster_to_update(cluster.id, 0)
+            e = inventory.add_event(cluster.inventory_key)
+            inventory.add_cluster_to_update(cluster.inventory_key, 0)
             success = e.wait(10.0)
             if not success:
                 abort(500, 'update timed out')
@@ -666,16 +662,12 @@ def cluster_put(cluster_id, db):
         else:
             abort(500, 'impossible to update inventory_cluster')
 
-    # inv_host.block_update(True)
     # WITH ADMIN PANEL
     cluster_def = schemas.ClusterPostSchema().load(request.json).data
     cluster.name = cluster_def['name']
     cluster.haproxy_host = cluster_def['haproxy_host']
-    cluster.haproxy_backend = cluster_def['haproxy_backend']
     if cluster.haproxy_host == '':
         cluster.haproxy_host = None
-    if cluster.haproxy_backend == '':
-        cluster.haproxy_backend = None
     for server_asso in cluster.servers:
         db.delete(server_asso)
     cluster.servers = []
@@ -691,7 +683,6 @@ def cluster_put(cluster_id, db):
             cluster_def=cluster
         ))
     db.commit()
-    # inv_host.block_update(False)
     return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
 
 
@@ -1032,7 +1023,7 @@ class ApiWorker(object):
 
     # TODO: use our own config everywhere, do not rely on Bottle for that
     # (eg pass only the config object)
-    def __init__(self, config_path, config, notifier, websocket_notifier, authentificator, health, inventory_auth=None, inventory_host=None):
+    def __init__(self, config_path, config, notifier, websocket_notifier, authenticator, health, inventory_auth=None, inventory_host=None):
         app = bottle.app()
         app.config.load_config(config_path)
         engine = database.engine()
@@ -1055,7 +1046,7 @@ class ApiWorker(object):
         app.config["deployer.notifier"] = notifier
         app.config["deployer.websocket_notifier"] = websocket_notifier
         app.config["deployer.bcrypt_log_rounds"] = 12
-        app.config["deployer.authentificator"] = authentificator
+        app.config["deployer.authenticator"] = authenticator
         app.config["health"] = health
         app.config["deployer.inventory"] = inventory_host
         app.config["deployer.inventory_auth"] = inventory_auth

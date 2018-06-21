@@ -64,12 +64,12 @@ def init_db(connection_string):
         schemas.register_schemas(Base)
 
 
+# unused for now, delete ?
 def get_or_create(session, model, defaults=None, **kwargs):
     instance = session.query(model).filter_by(**kwargs).first()
     if instance:
         return instance, False
     else:
-
         params = dict((k, v) for k, v in kwargs.iteritems())
         if type(defaults) == model:
             defaults = model.__marshmallow__().dump(defaults).data
@@ -77,6 +77,26 @@ def get_or_create(session, model, defaults=None, **kwargs):
         instance = model(**params)
         session.add(instance)
         return instance, True
+
+
+def create_or_update(session, model, values=None, **kwargs):
+    instance = session.query(model).filter_by(**kwargs).first()
+    if instance:
+        for k,v in values.iteritems():
+            setattr(instance, k, v)
+    else:
+        params = dict((k, v) for k, v in kwargs.iteritems())
+        params.update(values or {})
+        instance = model(**params)
+        session.add(instance)
+    return instance
+
+
+def get_and_update(session, model, values=None, **kwargs):
+    instance = session.query(model).filter_by(**kwargs).one()
+    for k,v in values.iteritems():
+        setattr(instance, k, v)
+    return instance
 
 
 @contextmanager
