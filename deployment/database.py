@@ -93,9 +93,10 @@ def create_or_update(session, model, values=None, **kwargs):
 
 
 def get_and_update(session, model, values=None, **kwargs):
-    instance = session.query(model).filter_by(**kwargs).one()
-    for k,v in values.iteritems():
-        setattr(instance, k, v)
+    instance = session.query(model).filter_by(**kwargs).one_or_none()
+    if instance is not None:
+        for k,v in values.iteritems():
+            setattr(instance, k, v)
     return instance
 
 

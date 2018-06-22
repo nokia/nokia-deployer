@@ -92,12 +92,12 @@ class AsyncInventoryWorker(object):
             with database.session_scope() as session:
                 cluster = m.Cluster(**inventory_cluster)
                 for distant_server in inventory_servers:
-                    server = session.query(m.Server).filter_by(inventory_key=distant_server['inventory_key']).one_or_none()
+                    server = database.get_and_update(session, m.Server, distant_server, inventory_key=distant_server['inventory_key'])
                     if server is None:
                         # get_or_create only for transition: find servers without inventory_key
                         server = database.create_or_update(session, m.Server, distant_server, name=distant_server['name'])
-                        m.ClusterServerAssociation(cluster_def=cluster, server_def=server)
-                        logger.info("server {} added in cluster {}".format(server.name, cluster.name))
+                    m.ClusterServerAssociation(cluster_def=cluster, server_def=server)
+                    logger.info("server {} added in cluster {}".format(server.name, cluster.name))
                 session.add(cluster)
         except InventoryError as e:
             self.log_error(cluster_key, e.message)
@@ -115,7 +115,7 @@ class AsyncInventoryWorker(object):
                 cluster = database.get_and_update(session, m.Cluster, inventory_cluster, inventory_key=cluster_key)
                 old_servers = dict((server.server_def.inventory_key, server) for server in cluster.servers)
                 for distant_server in inventory_servers:
-                    server = session.query(m.Server).filter_by(inventory_key=distant_server['inventory_key']).one_or_none()
+                    server = database.get_and_update(session, m.Server, distant_server, inventory_key=distant_server['inventory_key'])
                     if server is None:
                         # get_or_create only for transition: find servers without inventory_key
                         server = database.create_or_update(session, m.Server, distant_server, name=distant_server['name'])
