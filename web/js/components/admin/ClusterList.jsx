@@ -27,25 +27,10 @@ const ClusterList = React.createClass({
                 name: React.PropTypes.string.isRequired,
                 inventoryKey: React.PropTypes.string,
                 haproxyHost: React.PropTypes.string,
-                haproxyBackend: React.PropTypes.string,
                 servers: ImmutablePropTypes.listOf(
                     ImmutablePropTypes.contains({
                         haproxyKey: React.PropTypes.string,
                         serverId: React.PropTypes.number.isRequired
-                    })
-                ).isRequired
-            })
-        ),
-        inventoryClustersById: ImmutablePropTypes.mapOf(
-            ImmutablePropTypes.contains({
-                id: React.PropTypes.string.isRequired,
-                inventory_key: React.PropTypes.string.isRequired,
-                name: React.PropTypes.string.isRequired,
-                haproxyHost: React.PropTypes.string,
-                servers: ImmutablePropTypes.listOf(
-                    ImmutablePropTypes.contains({
-                        inventory_key: React.PropTypes.string.isRequired,
-                        name: React.PropTypes.string.isRequired
                     })
                 ).isRequired
             })
@@ -56,11 +41,9 @@ const ClusterList = React.createClass({
         this.props.dispatch(Actions.loadClusterList());
         // Some servers may not belong to any cluster, so we need a separate request
         this.props.dispatch(Actions.loadServerList());
-        this.props.dispatch(Actions.loadInventoryClusterList());
     },
     getDefaultProps() {
         return {
-            inventoryClustersById: Immutable.Map(),
             serversById: Immutable.Map()
         };
     },
@@ -83,13 +66,13 @@ const ClusterList = React.createClass({
             if(!cluster) {
                 return <h2>This cluster does not exist.</h2>;
             }
-            return React.cloneElement(this.props.children, {cluster, dispatch: this.props.dispatch, serversById: this.props.serversById, inventoryClustersById: this.props.inventoryClustersById});
+            return React.cloneElement(this.props.children, {cluster, dispatch: this.props.dispatch, serversById: this.props.serversById});
         }
         return (
             <div>
                 <h2>Clusters</h2>
                 <h3>Add Cluster</h3>
-                <ClusterForm inventoryClustersById={that.props.inventoryClustersById} serversById={that.props.serversById} onSubmit={that.addCluster} />
+                <ClusterForm serversById={that.props.serversById} onSubmit={that.addCluster} />
                 <h3>Cluster List</h3>
                 <table className="table table-condensed table-striped">
                     <thead>
@@ -98,7 +81,6 @@ const ClusterList = React.createClass({
                             <td>Name</td>
                             <td>Servers</td>
                             <td>HAProxy Host</td>
-                            <td>HAProxy Backend</td>
                             <td>Actions</td>
                         </tr>
                     </thead>
@@ -120,7 +102,6 @@ const ClusterList = React.createClass({
                                 </ul>
                             </td>
                             <td>{cluster.get('haproxyHost') ? cluster.get('haproxyHost') : "none"}</td>
-                            <td>{cluster.get('haproxyBackend') ? cluster.get('haproxyBackend') : "none"}</td>
                             <td>
                                 <div className="btn-group">
                                 {cluster.get('inventoryKey')==null ?
@@ -128,7 +109,7 @@ const ClusterList = React.createClass({
                                 :
                                     <Link type="button" className="btn btn-sm btn-default" to='' disabled>Edit</Link>
                                 }
-                                <button type="button" className="btn btn-sm btn-danger" onClick={that.deleteCluster(cluster)}>Delete</button>
+                                <button type="button" className="btn btn-sm btn-danger" onClick={that.deleteCluster(cluster)} disabled={cluster.get('inventoryKey')!=null}>Delete</button>
                                 <button type="button" className="btn btn-sm btn-info" onClick={that.refreshCluster(cluster)} disabled={cluster.get('inventoryKey')==null}>
                                   <span className="glyphicon glyphicon-refresh"></span> Sync
                                 </button>
@@ -141,8 +122,8 @@ const ClusterList = React.createClass({
             </div>
         );
     },
-    addCluster(name, inventoryKey, haproxyHost, haproxyBackend, servers_data) {
-        this.props.dispatch(Actions.addCluster({name, inventoryKey, haproxyHost, haproxyBackend, servers: servers_data}));
+    addCluster(name, inventoryKey, haproxyHost, servers_data) {
+        this.props.dispatch(Actions.addCluster({name, inventoryKey, haproxyHost, servers: servers_data}));
     },
     deleteCluster(cluster) {
         const that = this;
@@ -174,7 +155,6 @@ const ClusterList = React.createClass({
 const ReduxClusterList = connect(state => ({
     clustersById: state.get('clustersById'),
     serversById: state.get('serversById'),
-    inventoryClustersById: state.get('inventoryClustersById')
 }))(ClusterList);
 
 export default ReduxClusterList;

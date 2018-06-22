@@ -16,7 +16,6 @@ const ClusterForm = React.createClass({
             name: React.PropTypes.string.isRequired,
             haproxyHost: React.PropTypes.string,
             inventoryKey: React.PropTypes.string,
-            haproxyBackend: React.PropTypes.string,
             servers: ImmutablePropTypes.listOf(
                 ImmutablePropTypes.contains({
                     haproxyKey: React.PropTypes.string,
@@ -30,39 +29,17 @@ const ClusterForm = React.createClass({
                 name: React.PropTypes.string.isRequired
             })
         ).isRequired,
-        inventoryClustersById: ImmutablePropTypes.mapOf(
-            ImmutablePropTypes.contains({
-                id: React.PropTypes.string.isRequired,
-                inventory_key : React.PropTypes.string.isRequired,
-                name: React.PropTypes.string.isRequired,
-                servers: ImmutablePropTypes.listOf(
-                    ImmutablePropTypes.contains({
-                        inventory_key: React.PropTypes.string.isRequired,
-                        name: React.PropTypes.string.isRequired
-                    })
-                ).isRequired
-            })
-        ),
         onSubmit: React.PropTypes.func.isRequired
     },
     getInitialState() {
         let clusterName = "";
         let haproxyHost = "";
-        let haproxyBackend = "";
         let selectedServers = List();
-        let selectedInventoryCluster = null;
-        let clusterType = "inventory";
         const haproxyKeys = {}; // map server id to server haproxyKey
         const that = this;
         if(this.props.cluster) {
             clusterName = this.props.cluster.get('name');
             haproxyHost = this.props.cluster.get('haproxyHost');
-            haproxyBackend = this.props.cluster.get('haproxyBackend');
-            if (this.props.cluster.get('inventoryKey') == null) {
-              clusterType = 'deployer';
-            } else {
-              clusterType = 'inventory';
-            }
             selectedServers = this.props.cluster.get('servers').map(server => that.props.serversById.get(server.get('serverId')));
             this.props.cluster.get('servers').map(server => {
                 haproxyKeys[server.get('serverId')] = server.get('haproxyKey');
@@ -71,19 +48,12 @@ const ClusterForm = React.createClass({
         return {
             clusterName,
             haproxyHost,
-            haproxyBackend,
             selectedServers,
-            selectedInventoryCluster,
-            clusterType,
             haproxyKeys
         };
     },
     onServersChanged(servers) {
         this.setState({selectedServers: servers});
-    },
-    onClusterChanged(cluster) {
-      console.log('test');
-        this.setState({selectedInventoryCluster: cluster});
     },
     componentWillReceiveProps(nextProps) {
         if(nextProps.cluster && (nextProps.cluster != this.props.cluster || nextProps.serversById != this.props.serversById)) {
@@ -107,59 +77,12 @@ const ClusterForm = React.createClass({
             that.setState({haproxyKeys: newHaproxyKeys});
         }
     },
-    renderClusterData(cluster) {
-      return (
-        <div>
-        <div className="row"> <h5>Servers :</h5> </div>
-        {cluster.get('servers').map(server =>
-            <div key={server.id} className="row">
-              <div className="col-sm-8 form-align"> {server.get('name')} </div>
-            </div>)}
-        </div>
-        );
-
-    },
     render() {
         const that = this;
         let multipleChoice = (this.props.cluster == null);
         return (
           <div>
-          {multipleChoice &&
-              <ul className="nav nav-tabs">
-                  <li onClick={that.onMethodTabClicked('inventory')} className={this.state.clusterType == 'inventory' ? "active" : ""}><a href="#">
-                  <span className="glyphicon glyphicon-cloud"></span> From inventory
-                      </a></li>
-                  <li onClick={that.onMethodTabClicked('deployer')} className={this.state.clusterType == 'deployer' ? "active" : ""}><a href="#">
-                  <span className="glyphicon glyphicon-plus"></span> Local add
-                      </a></li>
-              </ul>
-            }
-            {multipleChoice &&
-            <div className="cluster-form-tab" hidden={this.state.clusterType != 'inventory'}>
-                <form className="form-horizontal">
-                    <div className="form-group">
-                        <label className="col-sm-2 control-label">Available clusters</label>
-                        <div className="col-sm-8">
-                            <FuzzyListSelector
-                                onChange={this.onClusterChanged}
-                                elements={this.props.inventoryClustersById.toList()}
-                                renderElement={cluster => cluster.get('name')}
-                                compareWith={cluster => cluster.get('name')}
-                                selectedElement={this.state.selectedInventoryCluster}
-                                placeholder="hq|my-cluster_dev"
-                                renderElementView={this.renderClusterData}
-                                />
-                        </div>
-                    </div>
-                    <div className="form-group">
-                        <div className="col-sm-5 col-sm-offset-2">
-                            <button type="button" onClick={this.onInventorySubmit} className="btn btn-default">Submit</button>
-                        </div>
-                    </div>
-                </form>
-            </div>
-          }
-            <div className="cluster-form-tab" hidden={this.state.clusterType != 'deployer'}>
+            <div className="cluster-form-tab">
                 <form className="form-horizontal">
                     <div className="form-group">
                         <label className="col-sm-2 control-label">Name</label>
@@ -205,20 +128,6 @@ const ClusterForm = React.createClass({
     reset() {
         this.setState(this.getInitialState());
     },
-    onMethodTabClicked(value) {
-      return e => {
-          e.preventDefault();
-          this.setState({clusterType: value});
-      };
-    },
-    onInventorySubmit() {
-      this.props.onSubmit(
-        this.state.selectedInventoryCluster.get('name'),
-        this.state.selectedInventoryCluster.get('inventory_key'),
-        null,
-        null,
-        []);
-    },
     onSubmit() {
         const serversHaproxy = [];
         this.state.selectedServers.forEach(server => {
@@ -232,7 +141,6 @@ const ClusterForm = React.createClass({
           this.state.clusterName,
           null,
           this.state.haproxyHost,
-          this.state.haproxyBackend,
           serversHaproxy);
     }
 });

@@ -16,7 +16,6 @@ const ClusterEdit = React.createClass({
             name: React.PropTypes.string.isRequired,
             inventoryKey: React.PropTypes.string,
             haproxyHost: React.PropTypes.string,
-            haproxyBackend: React.PropTypes.string,
             servers: ImmutablePropTypes.listOf(
                 ImmutablePropTypes.contains({
                     haproxyKey: React.PropTypes.string,
@@ -55,8 +54,8 @@ const ClusterEdit = React.createClass({
             </div>
         );
     },
-    editCluster(name, inventoryKey, haproxyHost, haproxyBackend, servers_data) {
-        this.props.dispatch(Actions.editCluster(this.props.cluster.get('id'), {name, inventoryKey, haproxyHost, haproxyBackend, servers: servers_data}));
+    editCluster(name, inventoryKey, haproxyHost, servers_data) {
+        this.props.dispatch(Actions.editCluster(this.props.cluster.get('id'), {name, inventoryKey, haproxyHost, servers: servers_data}));
         this.context.router.push('/admin/clusters');
     },
     reset() {

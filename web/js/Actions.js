@@ -218,13 +218,13 @@ const clusterActions = restActions('cluster', 'clusters', {
     baseUrl: () => '/clusters',
     schema: cluster,
     // servers: array of {'haproxyKey': ..., 'serverId': ...}
-    makeData: ({name, inventoryKey, haproxyHost, haproxyBackend, servers}) => {
+    makeData: ({name, inventoryKey, haproxyHost, servers}) => {
         const serversData = servers.map(serverData => ({
             haproxy_key: serverData.haproxyKey,
             inventory_key: serverData.inventoryKey,
             server_id: serverData.serverId
         }));
-        return {name, inventory_key: inventoryKey, haproxy_host: haproxyHost, haproxy_backend: haproxyBackend, servers: serversData};
+        return {name, inventory_key: inventoryKey, haproxy_host: haproxyHost, servers: serversData};
     },
     alertAction: addAlert
 });
@@ -232,22 +232,6 @@ export const loadClusterList = clusterActions.list;
 export const addCluster = clusterActions.add;
 export const deleteCluster = clusterActions.delete;
 export const editCluster = clusterActions.edit;
-
-const inventoryClusterActions = restActions('inventory_cluster', 'inventory_clusters', {
-    baseUrl: () => '/inventory_clusters',
-    schema: inventory_cluster,
-    makeData: ({name, inventoryKey, haproxyHost, servers}) => {
-      const serversData = servers.map(serverData => ({
-        inventory_key: serverData.inventoryKey,
-        name: serverData.name,
-        haproxy_key: serverData.haproxyKey,
-      }));
-      return {name: name, inventory_key: inventoryKey, haproxy_host: haproxyHost, servers: serversData};
-    },
-    alertAction: addAlert
-});
-export const loadInventoryClusterList = inventoryClusterActions.list;
-//export const addInventoryCluster = inventoryClusterActions.add;
 
 const environmentActions = restActions("environment", "environments", {
     postUrl: ({repositoryId}) => `/repositories/${repositoryId}/environments`,
