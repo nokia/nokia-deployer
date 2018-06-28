@@ -517,57 +517,6 @@ def server_put(server_id, db):
 def account_get(db):
     return json.dumps({'user': m.User.__marshmallow__().dump(request.account).data})
 
-#
-# @get('/api/inventory_clusters')
-# @requires_admin
-# def inventory_cluster_get(db):
-#     inv_host = default_app().config["deployer.inventory"]
-#     if inv_host is not None:
-#         clusters = inv_host.get_clusters()
-#         if clusters is None:
-#             abort(500, 'impossible to get clusters from inventory')
-#         return json.dumps({'inventory_clusters': clusters})
-#     else:
-#         return json.dumps({'inventory_clusters': []})
-
-
-# @post('/api/inventory_clusters')
-# @requires_admin
-# def inventory_cluster_post(db):
-#     inv_host = default_app().config["deployer.inventory"]
-#     if inv_host is not None:
-#         cluster_raw = request.json
-#         if 'inventory_key' not in cluster_raw:
-#             abort(400, 'missing parameter(s)')
-#         try:
-#             cluster, servers = inv_host.get_cluster(cluster_raw['inventory_key'])
-#             if cluster is None:
-#                 abort(400, 'inventory_key not found')
-#             for server in servers:
-#                 db_server = db.query(m.Server).filter_by(inventory_key=server.inventory_key).one_or_none()
-#                 if db_server is None:
-#                         # get_or_create only for transition: find servers without inventory_key
-#                         db_server, created = database.get_or_create(db, m.Server, defaults=server, name=server.name)
-#                         if created:
-#                             db_server.port = 22
-#                         else:
-#                             db_server.inventory_key = server.inventory_key
-#                             db_server.activated = server.activated
-#                 else:
-#                     db_server.name = server.name
-#                     db_server.activated = server.activated
-#                 asso = m.ClusterServerAssociation(cluster_def=cluster, server_def=db_server)
-#                 cluster.servers.append(asso)
-#             db.add(cluster)
-#             db.commit()
-#         except Exception:
-#             db.rollback()
-#             abort(500)
-#         return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
-#
-#     else:
-#         abort(404)
-
 
 @post('/api/clusters/update')
 @requires_inventory_auth
@@ -579,8 +528,6 @@ def inventory_update_hook(db):
             if 'clusters' in update_def:
                 for cluster in update_def['clusters']:
                     inventory.add_cluster_to_update(cluster, 0) # max priority
-            if 'last_update' in update_def:
-                inv_host.is_up_to_date(update_def['last_update'])
         except:
             abort(400, "wrong update data")
     else:
@@ -651,14 +598,14 @@ def cluster_put(cluster_id, db):
     # WITH INVENTORY : pull cluster's data from the inventory
     if cluster.inventory_key is not None:
         if inv_host is not None:
-            e = inventory.add_event(cluster.inventory_key)
-            inventory.add_cluster_to_update(cluster.inventory_key, 0)
-            success = e.wait(10.0)
-            if not success:
-                abort(500, 'update timed out')
+            status, inv_cluster, inv_servers = inv_host.get_cluster(cluster.inventory_key)
+            if status == 'existing':
+                inventory.update_cluster(inv_cluster, inv_servers)
+            elif status == 'deleted':
+                inventory.delete_cluster(cluster.inventory_key)
             cluster = db.query(m.Cluster).get(cluster_id)
-            test = {'cluster': m.Cluster.__marshmallow__().dump(cluster).data}
-            return json.dumps(test)
+            cluster_json = {'cluster': m.Cluster.__marshmallow__().dump(cluster).data}
+            return json.dumps(cluster_json)
         else:
             abort(500, 'impossible to update inventory_cluster')
 

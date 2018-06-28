@@ -16,7 +16,7 @@ from .log import configure_logging
 from .checkreleases import CheckReleasesWorker
 from .cleaner import CleanerWorker
 from .worker import DeployerWorker, AsyncFetchWorker
-from .inventory import InventoryWorker, AsyncInventoryWorker
+from .inventory import InventoryUpdateChecker, AsyncInventoryWorker
 
 logger = getLogger(__name__)
 
@@ -141,18 +141,17 @@ class WorkerSupervisor(object):
         # START FEATURE FLAG: inventory
         self.inventory_host = None
         self.inventory_auth = None
-        if config.has_section('inventory') and config.getboolean('inventory', 'activate') is True:
-            self.inventory_host = provider.inventory_host()#InventoryHost(config.get('inventory', 'api_host'), provider.inventory_authenticator())
-            if config.has_option('inventory', 'update_frequency'):
-                inventory_frequency = config.getint('inventory', 'update_frequency')
-            else:
-                inventory_frequency = 60
-            inventory_worker = InventoryWorker(self.inventory_host, inventory_frequency)
-            workers.append(inventory_worker)
-
-            async_synchronizer = AsyncInventoryWorker(self.inventory_host)
-            workers.append(async_synchronizer)
-
+        if config.has_section('inventory') and config.getboolean('inventory', 'activate_updater') is True:
+            self.inventory_host = provider.inventory_host()
+            if config.getboolean('inventory', 'activate_checker'):
+                if config.has_option('inventory', 'update_frequency'):
+                    inventory_frequency = config.getint('inventory', 'update_frequency')
+                else:
+                    inventory_frequency = 60
+                inventory_update_checker = InventoryUpdateChecker(self.inventory_host, inventory_frequency)
+                workers.append(inventory_update_checker)
+            async_inv_updater = AsyncInventoryWorker(self.inventory_host)
+            workers.append(async_inv_updater)
             self.inventory_auth = provider.inventory_authenticator()
         # END FEATURE FLAG
 

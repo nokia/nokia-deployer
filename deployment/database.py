@@ -64,22 +64,7 @@ def init_db(connection_string):
         schemas.register_schemas(Base)
 
 
-# unused for now, delete ?
-def get_or_create(session, model, defaults=None, **kwargs):
-    instance = session.query(model).filter_by(**kwargs).first()
-    if instance:
-        return instance, False
-    else:
-        params = dict((k, v) for k, v in kwargs.iteritems())
-        if type(defaults) == model:
-            defaults = model.__marshmallow__().dump(defaults).data
-        params.update(defaults or {})
-        instance = model(**params)
-        session.add(instance)
-        return instance, True
-
-
-def create_or_update(session, model, values=None, **kwargs):
+def upsert(session, model, values=None, **kwargs):
     instance = session.query(model).filter_by(**kwargs).first()
     if instance:
         for k,v in values.iteritems():
@@ -101,9 +86,9 @@ def get_and_update(session, model, values=None, **kwargs):
 
 
 @contextmanager
-def session_scope():
+def session_scope(expire_on_commit=False):
     """Provide a transactional scope around a series of operations."""
-    session = Session()
+    session = Session(expire_on_commit=expire_on_commit)
     try:
         yield session
         session.commit()

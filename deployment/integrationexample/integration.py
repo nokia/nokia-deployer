@@ -177,21 +177,44 @@ class DummyInventoryAuthenticator(object):
 
 
 class StandardInventoryHost(object):
+    """
+    This object implements methods to fetch information from the inventory
+    such as clusters' data or last_update.
+    Also used to compute the last_update on the deployer.
+
+    This current object is one possible implementation of the inventory.
+    It is encouraged to follow the following schema for the inventory API.
+    """
 
     def __init__(self, host, authenticator):
-        self.most_recent_version = None
         self.host = host
         self.authenticator = authenticator
 
     def is_up_to_date(self):
-        self.most_recent_version = self.fetch_most_recent_version()
-        local_version = self.get_local_version()
-        if local_version == self.most_recent_version:
+        """
+        Method called by the workers related to the synchronisation.
+        It checks if the deployer is up-to-date with the inventory.
+
+        returns:
+            True if the deployer is up-to-date
+            False otherwise.
+        """
+        most_recent_version = self._fetch_most_recent_version()
+        local_version = self._get_local_version()
+        if local_version == most_recent_version:
             return True
         else:
             return False
 
-    def get_local_version(self):
+    def _get_local_version(self):
+        """
+        FYI: NOT MANDATORY, could be integrated in is_up_to_date() function
+
+        Returns an image of the last update performed on the deployer
+        Here, a hash of the concatenation of the clusters last_update is computed and returned
+
+        It is possible to store a value in db rather than compute the value each time.
+        """
         dates_concat = ''
         with database.session_scope() as session:
             clusters = session.query(m.Cluster).filter(m.Cluster.inventory_key!=None).order_by(m.Cluster.inventory_key).all()
@@ -199,7 +222,13 @@ class StandardInventoryHost(object):
                 dates_concat += str(time.mktime(cluster.updated_at.utctimetuple()))
         return hashlib.sha256(dates_concat).hexdigest()
 
-    def fetch_most_recent_version(self):
+    def _fetch_most_recent_version(self):
+        """
+        FYI: NOT MANDATORY, could be integrated in is_up_to_date() function
+
+        Returns an image of the last update of the inventory.
+        Here, it calls inventory api route 'api/last_update'
+        """
         header = self.authenticator.get_token_header()
         res = requests.get("{}/api/last_update".format(self.host), headers=header)
         payload = res.json()
@@ -207,10 +236,14 @@ class StandardInventoryHost(object):
             raise InventoryError("bad response from inventory")
         return payload["last_update"]
 
-    def set_most_recent_version(self, version):
-        self.most_recent_version = version
-
     def get_clusters(self):
+        """
+        Method called by the inventory-update-checker worker for a full update.
+        Retrieves all the clusters available from the inventory
+
+        returns:
+            List of all inventory keys: [inventory_key_1, inventory_key_2, ...]
+        """
         header = self.authenticator.get_token_header()
         clusters_json = requests.get("{}/api/clusters".format(self.host), headers=header)
         clusters = clusters_json.json()
@@ -220,6 +253,16 @@ class StandardInventoryHost(object):
             raise InventoryError('bad response from inventory')
 
     def get_cluster(self, inventory_key):
+        """
+        Method called by the async-inventory-updater worker to update a cluster.
+        Fetch the information about one cluster, given an inventory_key.
+
+        returns:
+            1. a flag: 'existing' or 'deleted' if the cluster is still present in the inventory
+            2. cluster data: {'inventory_key': _, 'name': _, 'updated_at': _} is the minimal payload
+            3. servers data: array of all servers in the cluster. Minimal data:
+                [{'inventory_key': _, 'name': _, 'activated': _}, {...}, ...]
+        """
         header = self.authenticator.get_token_header()
         raw = requests.get("%s/api/cluster/%s" % (self.host, inventory_key), headers=header)
         res = raw.json()
