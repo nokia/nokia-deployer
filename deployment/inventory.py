@@ -216,7 +216,6 @@ class InventoryUpdateChecker(object):
         simultaneously.
         """
         sleep_time = random.randrange(self.frequency * 60)
-        print sleep_time
         i = 0
         while i < (sleep_time/5) and self._running:
             time.sleep(5)

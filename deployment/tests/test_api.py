@@ -34,6 +34,7 @@ class TestApi(unittest.TestCase):
         # Speed up tests
         default_app().config["deployer.bcrypt_log_rounds"] = 4
         default_app().config["deployer.authenticator"] = DummyAuthenticator()
+        default_app().config["deployer.inventory"] = None
         database.drop_all()
         database.create_all()
         self.session = database.Session()
