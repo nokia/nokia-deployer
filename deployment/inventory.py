@@ -85,16 +85,21 @@ def update_cluster(inventory_cluster, inventory_servers):
     return "updated"
 
 
-def delete_cluster(cluster_key):
+def delete_cluster(cluster_key, safe_mode=True):
     try:
         with database.session_scope() as session:
             cluster = session.query(m.Cluster).filter_by(inventory_key=cluster_key).one()
-            for server_asso in cluster.servers:
-                session.delete(server_asso)
-            for env_asso in cluster.environments:
-                session.delete(env_asso)
-            session.refresh(cluster)
-            session.delete(cluster)
+            if safe_mode:
+                cluster.name = "old-" + cluster.name
+                cluster.inventory_key = None
+                cluster.updated_at = None
+            else:
+                for server_asso in cluster.servers:
+                    session.delete(server_asso)
+                for env_asso in cluster.environments:
+                    session.delete(env_asso)
+                session.refresh(cluster)
+                session.delete(cluster)
             return "deleted"
     except NoResultFound:
         return "handled: already deleted (maybe by another instance of the deployer)"
