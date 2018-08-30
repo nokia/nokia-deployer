@@ -115,7 +115,7 @@ def check_auth():
     if 'X-Session-Token' in request.headers:
         token = request.headers['X-Session-Token']
 
-    if token is None:
+    if token is None or token == '':
         # Allow unprotected routes if no token is provided
         return use_default_user()
 
@@ -262,6 +262,7 @@ def repositories_diff(repository_id, db):
     env = envs[0]
     path = os.path.join(default_app().config['general.local_repo_path'], env.local_repo_directory_name)
     diff = gitutils.LocalRepository(path).diff(from_commit, to_commit)
+    diff = diff.replace('\t', '\u2003')
     return json.dumps({'diff': {'from': from_commit, 'to': to_commit, 'diff': diff}})
 
 

@@ -7,6 +7,12 @@ import { fetchDiff, loadRepository } from '../Actions.js';
 import PureRenderMixin from 'react-addons-pure-render-mixin';
 import SimpleRepositoryList from './SimpleRepositoryList.jsx';
 
+const tabReplace = (message) => {
+    return message.replace(/\\u(\w\w\w\w)/g,function(a,b) {
+        var charcode = parseInt(b,16);
+        return String.fromCharCode(charcode);
+      });
+}
 
 const parseDiff = (message) => {
     if(message == null) {
@@ -17,15 +23,15 @@ const parseDiff = (message) => {
     for(let i = 0, len = lines.length; i < len; i++) {
         const line = lines[i];
         if(line.substring(0, 10) == 'diff --git') {
-            out.push(<h4 key={i}>{line}</h4>);
+            out.push(<h4 key={i}>{tabReplace(line)}</h4>);
         } else if(line.substring(0,1) == '-') {
-            out.push(<p key={i} className="text-danger">{line}</p>);
+            out.push(<p key={i} className="text-danger">{tabReplace(line)}</p>);
         } else if(line.substring(0,1) == '+') {
-            out.push(<p key={i} className="text-success">{line}</p>);
+            out.push(<p key={i} className="text-success">{tabReplace(line)}</p>);
         } else if(line.substring(0,2) == '@@') {
-            out.push(<h6 key={i}>{line}</h6>);
+            out.push(<h6 key={i}>{tabReplace(line)}</h6>);
         } else {
-            out.push(<p key={i}>{line}</p>);
+            out.push(<p key={i}>{tabReplace(line)}</p>);
         }
     }
     return out;
