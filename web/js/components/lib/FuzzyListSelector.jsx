@@ -23,7 +23,6 @@ const FuzzyListSelector = React.createClass({
     },
     render() {
         const that = this;
-
         return (
             <div>
                 <FuzzyInput
@@ -34,8 +33,8 @@ const FuzzyListSelector = React.createClass({
                     onElementSelected={that.selectElement} />
                 {that.props.selectedElement &&
                   [<div className="row">
-                    <div className="col-sm-5 form-align">
-                    <h4>{that.props.selectedElement.get('name')} <button type="button" className="btn btn-sm btn-default" onClick={() => that.removeElement()}>Remove</button></h4>
+                    <div className="col-sm-8 form-align">
+                    <h5>{that.props.selectedElement.get('name')} <button type="button" className="btn btn-sm btn-default" onClick={() => that.removeElement()}>Remove</button></h5>
                      </div>
                   </div>,
                   <div>

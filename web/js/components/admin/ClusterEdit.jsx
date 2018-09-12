@@ -16,6 +16,7 @@ const ClusterEdit = React.createClass({
             name: React.PropTypes.string.isRequired,
             inventoryKey: React.PropTypes.string,
             haproxyHost: React.PropTypes.string,
+            haproxyBackend: React.PropTypes.number,
             servers: ImmutablePropTypes.listOf(
                 ImmutablePropTypes.contains({
                     haproxyKey: React.PropTypes.string,
@@ -30,6 +31,12 @@ const ClusterEdit = React.createClass({
                 name: React.PropTypes.string.isRequired
             })
         ).isRequired,
+        backendsById: ImmutablePropTypes.mapOf(
+            ImmutablePropTypes.contains({
+                id: React.PropTypes.number.isRequired,
+                name: React.PropTypes.string.isRequired
+            })
+        ).isRequired,
     },
     mixins: [PureRenderMixin],
     render() {
@@ -37,25 +44,19 @@ const ClusterEdit = React.createClass({
             <div>
                 <h2>Edit Cluster</h2>
                 <p><Link to={"/admin/clusters/"}>back to list</Link></p>
-                {this.props.cluster.get('inventoryKey') == null ?
                 <div>
-                    <ClusterForm cluster={this.props.cluster} ref="clusterForm" onSubmit={this.editCluster} serversById={this.props.serversById} />
+                    <ClusterForm cluster={this.props.cluster}  backendsById={this.props.backendsById} ref="clusterForm" onSubmit={this.editCluster} serversById={this.props.serversById} />
                     <div className="row">
                         <div className="col-sm-offset-2 col-sm-1">
                             <button className="btn btn-sm btn-warning" onClick={this.reset}>Reset</button>
                         </div>
                     </div>
                 </div>
-                :
-                <div className="row">
-                      Impossible to modify a cluster which is synchronized with the inventory
-                </div>
-                }
             </div>
         );
     },
-    editCluster(name, inventoryKey, haproxyHost, servers_data) {
-        this.props.dispatch(Actions.editCluster(this.props.cluster.get('id'), {name, inventoryKey, haproxyHost, servers: servers_data}));
+    editCluster(name, inventoryKey, haproxyHost, haproxyBackend, servers_data) {  //TODO HEEERE
+        this.props.dispatch(Actions.editCluster(this.props.cluster.get('id'), {name, inventoryKey, haproxyHost, haproxyBackend, servers: servers_data, sync:false}));
         this.context.router.push('/admin/clusters');
     },
     reset() {

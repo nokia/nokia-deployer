@@ -5,6 +5,7 @@ export const repository = new Schema('repositories');
 export const environment = new Schema('environments');
 export const serverAssociation = new Schema('serverAssociations');
 export const server = new Schema('servers');
+export const backend = new Schema('backends');
 export const cluster = new Schema('clusters');
 export const role = new Schema('roles');
 export const user = new Schema('users');

@@ -134,6 +134,32 @@ function serversByIdReducer(state = Map(), action) {
     return state;
 }
 
+function backendsByIdReducer(state = Map(), action) {
+    switch(action.type) {
+        case 'LOAD_ENVIRONMENTS':
+        case 'LOAD_BACKENDS':
+        case 'LOAD_RELEASES':
+            if (action.payload.status != 'SUCCESS') {
+                break;
+            }
+            if (!action.payload.entities.backends) {
+                // TODO: the real solution would be to figure out how to force
+                // normalizr to create empty arrays instead
+                break;
+            }
+            Object.values(action.payload.entities.backends).map(backend => {
+                state = state.mergeDeepIn([backend.id], Map({
+                        id: backend.id,
+                        name: backend.name,
+                        inventoryKey: backend.inventory_key,
+                        clusterKey: backend.cluster_key,
+                        haproxyHost: backend.haproxy_host,
+                    }));
+            });
+            break;
+    }
+    return state;
+}
 
 function clustersByIdReducer(state = Map(), action) {
     switch(action.type) {
@@ -172,7 +198,7 @@ function clusterFromPayload(payload, associations) {
         'name': payload.name,
         'inventoryKey': payload.inventory_key,
         'haproxyHost': payload.haproxy_host,
-        'haproxyBackend': null,
+        'haproxyBackend': payload.haproxy_backend_id,
         'servers': Immutable.List(payload.servers.map(association_id => Map({
             'serverId': associations[association_id].server,
             'haproxyKey': associations[association_id].haproxy_key
@@ -447,6 +473,7 @@ const appReducer = combineReducers({
     routing: routeReducer,
     clustersById: clustersByIdReducer,
     serversById: serversByIdReducer,
+    backendsById: backendsByIdReducer,
     alertsById: alertsByIdReducer,
     rolesById: rolesByIdReducer,
     usersById: usersByIdReducer,

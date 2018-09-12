@@ -1,6 +1,6 @@
 //Copyright (C) 2016 Nokia Corporation and/or its subsidiary(-ies).
 import Auth from 'Auth';
-import { environment, role, repository, user, server, deployment, cluster, inventory_cluster, serverRelease, environmentRelease } from './Schemas';
+import { environment, role, repository, user, server, deployment, cluster, backend, serverRelease, environmentRelease } from './Schemas';
 import { restActions, createAction } from './actionutils';
 
 
@@ -128,6 +128,13 @@ export const updateServerStatus = createAction('UPDATE_SERVER_STATUS', (serverId
     in_progress: false
 }));
 
+const backendActions = restActions('backend', 'backends', {
+    baseUrl: () => '/backends/',
+    schema: backend,
+    alertAction: addAlert,
+});
+export const loadBackendList = backendActions.list;
+
 export function fetchDiff(repositoryId, fromSha, toSha) {
     return dispatch => {
         const action = createAction('FETCH_DIFF', (repositoryId, fromSha, toSha, status, message) => ({
@@ -218,13 +225,13 @@ const clusterActions = restActions('cluster', 'clusters', {
     baseUrl: () => '/clusters',
     schema: cluster,
     // servers: array of {'haproxyKey': ..., 'serverId': ...}
-    makeData: ({name, inventoryKey, haproxyHost, servers}) => {
+    makeData: ({name, inventoryKey, haproxyHost, haproxyBackend, servers, sync}) => {
         const serversData = servers.map(serverData => ({
             haproxy_key: serverData.haproxyKey,
             inventory_key: serverData.inventoryKey,
             server_id: serverData.serverId
         }));
-        return {name, inventory_key: inventoryKey, haproxy_host: haproxyHost, servers: serversData};
+        return {name, inventory_key: inventoryKey, haproxy_host: haproxyHost, haproxy_backend_id: haproxyBackend, servers: serversData, sync};
     },
     alertAction: addAlert
 });

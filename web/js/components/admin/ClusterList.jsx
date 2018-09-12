@@ -21,12 +21,19 @@ const ClusterList = React.createClass({
                 name: React.PropTypes.string.isRequired
             })
         ),
+        backendsById: ImmutablePropTypes.mapOf(
+            ImmutablePropTypes.contains({
+                id: React.PropTypes.number.isRequired,
+                name: React.PropTypes.string.isRequired
+            })
+        ),
         clustersById: ImmutablePropTypes.mapOf(
             ImmutablePropTypes.contains({
                 id: React.PropTypes.number.isRequired,
                 name: React.PropTypes.string.isRequired,
                 inventoryKey: React.PropTypes.string,
                 haproxyHost: React.PropTypes.string,
+                haproxyBackend: React.PropTypes.number,
                 servers: ImmutablePropTypes.listOf(
                     ImmutablePropTypes.contains({
                         haproxyKey: React.PropTypes.string,
@@ -41,10 +48,12 @@ const ClusterList = React.createClass({
         this.props.dispatch(Actions.loadClusterList());
         // Some servers may not belong to any cluster, so we need a separate request
         this.props.dispatch(Actions.loadServerList());
+        this.props.dispatch(Actions.loadBackendList());
     },
     getDefaultProps() {
         return {
-            serversById: Immutable.Map()
+            serversById: Immutable.Map(),
+            backendsById: Immutable.Map()
         };
     },
     componentWillMount() {
@@ -66,13 +75,13 @@ const ClusterList = React.createClass({
             if(!cluster) {
                 return <h2>This cluster does not exist.</h2>;
             }
-            return React.cloneElement(this.props.children, {cluster, dispatch: this.props.dispatch, serversById: this.props.serversById});
+            return React.cloneElement(this.props.children, {cluster, dispatch: this.props.dispatch, serversById: this.props.serversById, backendsById: this.props.backendsById});
         }
         return (
             <div>
                 <h2>Clusters</h2>
                 <h3>Add Cluster</h3>
-                <ClusterForm serversById={that.props.serversById} onSubmit={that.addCluster} />
+                <ClusterForm serversById={that.props.serversById} backendsById={that.props.backendsById} onSubmit={that.addCluster} />
                 <h3>Cluster List</h3>
                 <table className="table table-condensed table-striped">
                     <thead>
@@ -91,8 +100,16 @@ const ClusterList = React.createClass({
                             <td>
                                 <ul className="list-unstyled">
                                 {cluster.get('servers').map(serverInfo => {
-                                    const haproxyKey = (serverInfo.get('haproxyKey') && cluster.get('haproxyHost')) ? `(HAProxy: ${serverInfo.get('haproxyKey')})` : "";
                                     const server = that.props.serversById.get(serverInfo.get('serverId'));
+                                    let haproxyKey = '';
+                                    if (cluster.get('inventoryKey')) {
+                                        if (cluster.get('haproxyBackend')) {
+                                            let backend = this.props.backendsById.get(cluster.get('haproxyBackend'));
+                                            haproxyKey = '(HAProxy: ' + backend.get('name') + ',' + server.get('name').split('.')[0].toUpperCase() + ')'
+                                        }
+                                    } else {
+                                        haproxyKey = (serverInfo.get('haproxyKey') && cluster.get('haproxyHost')) ? `(HAProxy: ${serverInfo.get('haproxyKey')})` : "";
+                                    }
                                     if(!server) {
                                         return [<li key={serverInfo.get('serverId')}>loading...</li>, "zzz"];
                                     }
@@ -101,14 +118,14 @@ const ClusterList = React.createClass({
                                 }).sort((s1, s2) => s1[1].localeCompare(s2[1])).map(s => s[0])}
                                 </ul>
                             </td>
+                            {cluster.get('inventoryKey') ?
+                            <td>{cluster.get('haproxyBackend') ? this.props.backendsById.get(cluster.get('haproxyBackend')).get('haproxyHost') : "none"}</td>
+                            :
                             <td>{cluster.get('haproxyHost') ? cluster.get('haproxyHost') : "none"}</td>
+                            }
                             <td>
                                 <div className="btn-group">
-                                {cluster.get('inventoryKey')==null ?
                                     <Link type="button" className="btn btn-sm btn-default" to={`/admin/clusters/${cluster.get('id')}/edit`}>Edit</Link>
-                                :
-                                    <Link type="button" className="btn btn-sm btn-default" to='' disabled>Edit</Link>
-                                }
                                 <button type="button" className="btn btn-sm btn-danger" onClick={that.deleteCluster(cluster)} disabled={cluster.get('inventoryKey')!=null}>Delete</button>
                                 <button type="button" className="btn btn-sm btn-info" onClick={that.refreshCluster(cluster)} disabled={cluster.get('inventoryKey')==null}>
                                   <span className="glyphicon glyphicon-refresh"></span> Sync
@@ -122,8 +139,8 @@ const ClusterList = React.createClass({
             </div>
         );
     },
-    addCluster(name, inventoryKey, haproxyHost, servers_data) {
-        this.props.dispatch(Actions.addCluster({name, inventoryKey, haproxyHost, servers: servers_data}));
+    addCluster(name, inventoryKey, haproxyHost, haproxyBackend, servers_data) {
+        this.props.dispatch(Actions.addCluster({name, inventoryKey, haproxyHost, haproxyBackend, servers: servers_data}));
     },
     deleteCluster(cluster) {
         const that = this;
@@ -146,7 +163,7 @@ const ClusterList = React.createClass({
                   haproxyKey: (server.get('haproxyKey') || null)
               });
           });
-          this.props.dispatch(Actions.editCluster(cluster.get('id'), {name: cluster.get('name'), inventoryKey:cluster.get('inventoryKey'), haproxyHost:'', servers: serversHaproxy}));
+          this.props.dispatch(Actions.editCluster(cluster.get('id'), {name: cluster.get('name'), inventoryKey:cluster.get('inventoryKey'), haproxyBackend: cluster.get('haproxyBackend'), haproxyHost: cluster.get('haproxyHost'), servers: serversHaproxy, sync:true}));
         }
       }
     },
@@ -155,6 +172,7 @@ const ClusterList = React.createClass({
 const ReduxClusterList = connect(state => ({
     clustersById: state.get('clustersById'),
     serversById: state.get('serversById'),
+    backendsById: state.get('backendsById'),
 }))(ClusterList);
 
 export default ReduxClusterList;
