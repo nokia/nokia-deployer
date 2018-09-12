@@ -574,6 +574,34 @@ def run_and_delete_deploy(host, remote_working_directory, environment_name, comm
     for e in capture("delete 'deploy.sh'", run_cmd_by_ssh, host, rm_cmd): yield e
 
 
+def get_haproxy_host(cluster):
+    host = None
+    if cluster.haproxy_backend_id is not None:
+        host = cluster.haproxy_backend_def.haproxy_host
+    if host is None:
+        host = cluster.haproxy_host
+    return host
+
+
+def get_servers_keys(cluster):
+    normalized_haproxy_keys = []
+    if cluster.haproxy_backend_id is not None:
+        backend_name = cluster.haproxy_backend_def.name
+        for server in cluster.servers:
+            server_key = server.server_def.name.split('.')[0].upper() # assuming there in no dot in servers' name
+            normalized_haproxy_keys.append([backend_name, server_key])
+    if len(normalized_haproxy_keys) == 0:
+        # old fashioned method
+        haproxy_keys = [s.haproxy_key for s in cluster.servers]
+        if any(k is None for k in haproxy_keys):
+            raise InvalidHAProxyKeyFormat("Some HAProxy keys are not defined")
+        invalid_keys = [k for k in haproxy_keys if k.count(',') != 1]
+        if len(invalid_keys) > 0:
+            raise InvalidHAProxyKeyFormat('The following HAProxy keys are invalid: {}'.format(invalid_keys))
+        normalized_haproxy_keys = [key.split(',') for key in haproxy_keys]
+    return normalized_haproxy_keys
+
+
 def disable_clusters(clusters, haproxy_auth):
     for r in cluster_action(clusters, haproxy_auth, HAProxyAction.DISABLE):
         yield r
@@ -587,10 +615,10 @@ def enable_clusters(clusters, haproxy_auth):
 def ensure_clusters_up(clusters, haproxy_auth):
     yield "Ensure all servers in clusters {} are up".format(", ".join(cluster.name for cluster in clusters))
     for cluster in clusters:
-        host = cluster.haproxy_host
+        host = get_haproxy_host(cluster)
         if host is None:
             continue
-        keys = [s.haproxy_key for s in cluster.servers]
+        keys = get_servers_keys(cluster)
         # Will raise an exception if the cluster is not UP (I know, I know... TODO refactor)
         haproxy_action(host, keys, haproxy_auth, 'UP', HAProxyAction.ENABLE)
 
@@ -602,12 +630,14 @@ def cluster_action(clusters, haproxy_auth, action):
         verb = "Disable"
     yield "{} clusters {}".format(verb, ", ".join(cluster.name for cluster in clusters))
     for cluster in clusters:
-        if cluster.haproxy_host is None:
+        haproxy_host = get_haproxy_host(cluster)
+        if haproxy_host is None:
             yield LogEntry('Cluster {} has no HAProxy configured, skipping.'.format(cluster.name))
             continue
         servers_description = ", ".join("{} ({})".format(server.server_def.name, server.haproxy_key) for server in cluster.servers)
         yield LogEntry('{} cluster {} (servers {})'.format(verb, cluster.name, servers_description))
-        haproxy_action(cluster.haproxy_host, [server.haproxy_key for server in cluster.servers], haproxy_auth, '', action)
+        server_keys = get_servers_keys(cluster)
+        haproxy_action(haproxy_host, server_keys, haproxy_auth, '', action)
 
 
 def run_local_tests(environment, local_repo_path, branch, commit, host, mail_sender, mail_report_to):
@@ -827,22 +857,11 @@ class HAProxyAction(enum.Enum):
 
 # TODO: refactor that, it does two things (status check + change status), and sometimes only one of these
 # actions is desired
-def haproxy_action(haproxy_host, haproxy_keys, haproxy_auth, expected_status, changeto_status):
+def haproxy_action(haproxy_host, normalized_haproxy_keys, haproxy_auth, expected_status, changeto_status):
     # Setup connection to HAProxy
     haproxy_con = haproxy(haproxy_host, haproxy_auth)
 
-    # Normalize keys (split them into backend, server)
-    # TODO: store them normalized in the database!
-
-
-    # Check that the key name is valid
-    if any(k is None for k in haproxy_keys):
-        raise InvalidHAProxyKeyFormat("Some HAProxy keys are not defined")
-    invalid_keys = [k for k in haproxy_keys if k.count(',') != 1]
-    if len(invalid_keys) > 0:
-        raise InvalidHAProxyKeyFormat('The following HAProxy keys are invalid: {}'.format(invalid_keys))
-
-    normalized_haproxy_keys = [key.split(',') for key in haproxy_keys]
+    # TODO: store haproxy_key normalized in the database!
 
     # Check status (all must have same status to do anything)
     for ha_backend, ha_server in normalized_haproxy_keys:

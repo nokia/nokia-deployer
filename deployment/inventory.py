@@ -19,8 +19,16 @@ logger = getLogger(__name__)
 update_queue = PriorityQueue(maxsize=0)
 
 
-def add_cluster_to_update(cluster_id, priority):
-    update_queue.put((priority, cluster_id))
+def add_object_to_update(object_id, type):
+    """
+    Add an object in the update queue.
+    :param object_id: inventory id of object
+    :param type: type of the object to update. Types are integer and are handled by the update worker in a priority order, lower first.
+                0 => cluster
+                1 => haproxy_backend
+    :return: None
+    """
+    update_queue.put((type, object_id))
 
 
 def add_cluster(inventory_cluster, inventory_servers):
@@ -105,13 +113,38 @@ def delete_cluster(cluster_key, safe_mode=True):
         return "handled: already deleted (maybe by another instance of the deployer)"
 
 
+def add_haproxy_backend(inventory_backend):
+    with database.session_scope() as session:
+        backend = m.HaproxyBackend(**inventory_backend)
+        session.add(backend)
+    return "created"
+
+
+def update_haproxy_backend(inventory_backend):
+    backend_key = inventory_backend['inventory_key']
+    with database.session_scope() as session:
+        database.get_and_update(session, m.HaproxyBackend, inventory_backend, inventory_key=backend_key)
+    return "updated"
+
+
+def delete_haproxy_backend(backend_key):
+    try:
+        with database.session_scope() as session:
+            backend = session.query(m.HaproxyBackend).filter_by(inventory_key=backend_key).one()
+            session.delete(backend)
+            return "deleted"
+    except NoResultFound:
+        return "handled: already deleted (maybe by another instance of the deployer)"
+
+
+
 class InventoryError(Exception):
 
     pass
 
 
 class AsyncInventoryWorker(object):
-    """The clusters updater. Check if updates are pending, handle errors, change last_update fields."""
+    """The objects updater. Check if updates are pending, handle errors, change last_update fields."""
 
     refresh_duration = 2
 
@@ -122,12 +155,12 @@ class AsyncInventoryWorker(object):
 
     def start(self):
         while self._running:
-            cluster_key = self.get_cluster_in_queue(block=True, timeout=self.refresh_duration)
+            sync_method, cluster_key = self.get_object_in_queue(block=True, timeout=self.refresh_duration)
             if cluster_key is not None:
                 try:
-                    self.sync_cluster(cluster_key)
+                    sync_method(cluster_key)
                 except Exception as e:
-                    self.log_error(cluster_key, e.message)
+                    self.log_error(sync_method.__name__, cluster_key, e.message)
                     logger.exception(e)
 
     def sync_cluster(self, cluster_key):
@@ -141,20 +174,37 @@ class AsyncInventoryWorker(object):
                 res = update_cluster(inventory_cluster, inventory_servers)
         elif status == "deleted":
             res = delete_cluster(cluster_key)
-        self.log_success(cluster_key, res)
+        self.log_success('cluster', cluster_key, res)
 
-    def get_cluster_in_queue(self, block, timeout=0):
+    def sync_haproxy_backend(self, backend_key):
+        status, inventory_backend = self.inventory_host.get_haproxy_backend(backend_key) # todo : add this integration + route in KS
+        with database.session_scope(expire_on_commit=False) as session:
+            backend_already_in_db = session.query(m.HaproxyBackend).filter_by(inventory_key=backend_key).count() > 0
+        if status == "existing":
+            if not backend_already_in_db:
+                res = add_haproxy_backend(inventory_backend)
+            else:
+                res = update_haproxy_backend(inventory_backend)
+        elif status == "deleted":
+            res = delete_haproxy_backend(backend_key)
+        self.log_success('haproxy backend', backend_key, res)
+
+    def get_object_in_queue(self, block, timeout=0):
         try:
-            _, cluster_id = update_queue.get(block=block, timeout=timeout)
-            return cluster_id
+            type, cluster_id = update_queue.get(block=block, timeout=timeout)
+            if type == 0:
+                method = self.sync_cluster
+            elif type == 1:
+                method = self.sync_haproxy_backend
+            return method, cluster_id
         except Empty:
-            return None
+            return None, None
 
-    def log_error(self, cluster_id, message="unknown error"):
-        logger.error("[AsyncInventoryWorker] error when updating cluster {}: {}".format(cluster_id, message))
+    def log_error(self, object_type, cluster_id, message="unknown error"):
+        logger.error("[AsyncInventoryWorker] error when {} {}: {}".format(object_type, cluster_id, message))
 
-    def log_success(self, cluster_id, message="updated"):
-        logger.info("[AsyncInventoryWorker] cluster {}: successfully {}".format(cluster_id, message))
+    def log_success(self, object_type, cluster_id, message="updated"):
+        logger.info("[AsyncInventoryWorker] {} {}: successfully {}".format(object_type, cluster_id, message))
 
     def stop(self):
         self._running = False
@@ -192,7 +242,8 @@ class InventoryUpdateChecker(object):
                         time.sleep(5)
                         break
                     try:
-                        updated = self.inventory_host.is_up_to_date()
+                        # check for clusters updates
+                        updated = self.inventory_host.clusters_are_up_to_date() # todo rename in clusters_are_up_to_date
                         if not updated:
                             inventory_clusters = self.inventory_host.get_clusters()
                             with database.session_scope(expire_on_commit=False) as session:
@@ -202,14 +253,29 @@ class InventoryUpdateChecker(object):
                                     inventory_clusters.insert(0, cluster.inventory_key)
                             self.log('info', "syncing {} clusters...".format(len(inventory_clusters)))
                             for cluster in inventory_clusters:
-                                add_cluster_to_update(cluster, 1) # 1 is the lowest priority
+                                add_object_to_update(cluster, 0)
 
                             self.successive_resync += 1
                             if self.successive_resync > 5:
                                 self.log('warning', "full sync often run, it might be a error with a cluster: see logs for more info.")
                         else:
-                            self.log('info', "up to date")
+                            self.log('info', "clusters up to date")
                             self.successive_resync = 0
+                        # check for backends updates
+                        updated = self.inventory_host.backends_are_up_to_date()# todo create function
+                        if not updated:
+                            inventory_backends = self.inventory_host.get_backends() #todo create function
+                            with database.session_scope(expire_on_commit=False) as session:
+                                database_backends = session.query(m.HaproxyBackend).filter(m.HaproxyBackend.inventory_key.notin_(inventory_backends)).all()
+                            for backend in database_backends:
+                                if backend.inventory_key is not None:
+                                    inventory_backends.insert(0, backend.inventory_key)
+                            self.log('info', "syncing {} backends...".format(len(inventory_backends)))
+                            for backend in inventory_backends:
+                                add_object_to_update(backend, 1)
+                        else:
+                            self.log('info', "backends up to date")
+
                     except RequestException as e:
                         self.log('error', 'communication issues with the inventory. Retry in {} minutes'.format(self.frequency))
                         logger.exception(e)

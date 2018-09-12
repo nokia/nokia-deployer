@@ -190,23 +190,39 @@ class StandardInventoryHost(object):
         self.host = host
         self.authenticator = authenticator
 
-    def is_up_to_date(self):
+    def clusters_are_up_to_date(self):
         """
         Method called by the workers related to the synchronisation.
-        It checks if the deployer is up-to-date with the inventory.
+        It checks if clusters in the deployer are up-to-date with the inventory.
 
         returns:
             True if the deployer is up-to-date
             False otherwise.
         """
-        most_recent_version = self._fetch_most_recent_version()
-        local_version = self._get_local_version()
+        most_recent_version = self._fetch_most_recent_version('clusters')
+        local_version = self._get_local_version(m.Cluster)
         if local_version == most_recent_version:
             return True
         else:
             return False
 
-    def _get_local_version(self):
+    def backends_are_up_to_date(self):
+        """
+        Method called by the workers related to the synchronisation.
+        It checks if backends in the deployer are up-to-date with the inventory.
+
+        returns:
+            True if the deployer is up-to-date
+            False otherwise.
+        """
+        most_recent_version = self._fetch_most_recent_version('backends')
+        local_version = self._get_local_version(m.HaproxyBackend)
+        if local_version == most_recent_version:
+            return True
+        else:
+            return False
+
+    def _get_local_version(self, obj_type):
         """
         FYI: NOT MANDATORY, could be integrated in is_up_to_date() function
 
@@ -217,12 +233,12 @@ class StandardInventoryHost(object):
         """
         dates_concat = ''
         with database.session_scope() as session:
-            clusters = session.query(m.Cluster).filter(m.Cluster.inventory_key!=None).order_by(m.Cluster.inventory_key).all()
-            for cluster in clusters:
-                dates_concat += str(time.mktime(cluster.updated_at.utctimetuple()))
+            objects = session.query(obj_type).filter(obj_type.inventory_key!=None).order_by(obj_type.inventory_key).all()
+            for obj in objects:
+                dates_concat += str(time.mktime(obj.updated_at.utctimetuple()))
         return hashlib.sha256(dates_concat).hexdigest()
 
-    def _fetch_most_recent_version(self):
+    def _fetch_most_recent_version(self, obj_type):
         """
         FYI: NOT MANDATORY, could be integrated in is_up_to_date() function
 
@@ -230,7 +246,7 @@ class StandardInventoryHost(object):
         Here, it calls inventory api route 'api/last_update'
         """
         header = self.authenticator.get_token_header()
-        res = requests.get("{}/api/last_update".format(self.host), headers=header)
+        res = requests.get("{}/api/last_update?type={}".format(self.host, obj_type), headers=header)
         payload = res.json()
         if "last_update" not in payload:
             raise InventoryError("bad response from inventory")

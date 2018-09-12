@@ -425,6 +425,14 @@ def deployment_get(deploy_id, db):
     return json.dumps({'deployment': schema.dump(deploy).data})
 
 
+@get('/api/backends/')
+@requires_admin
+def servers_get(db):
+    backends = db.query(m.HaproxyBackend).all()
+    schema = m.HaproxyBackend.__marshmallow__(many=True)
+    return json.dumps({'backends': schema.dump(backends).data})
+
+
 @get('/api/servers/')
 @requires_admin
 def servers_get(db):
@@ -528,7 +536,7 @@ def inventory_update_hook(db):
         try:
             if 'clusters' in update_def:
                 for cluster in update_def['clusters']:
-                    inventory.add_cluster_to_update(cluster, 0) # max priority
+                    inventory.add_object_to_update(cluster, 0) # max priority
         except:
             abort(400, "wrong update data")
     else:
@@ -598,17 +606,27 @@ def cluster_put(cluster_id, db):
         abort(404)
     # WITH INVENTORY : pull cluster's data from the inventory
     if cluster.inventory_key is not None:
-        if inv_host is not None:
-            status, inv_cluster, inv_servers = inv_host.get_cluster(cluster.inventory_key)
-            if status == 'existing':
-                inventory.update_cluster(inv_cluster, inv_servers)
-            elif status == 'deleted':
-                inventory.delete_cluster(cluster.inventory_key)
-            cluster = db.query(m.Cluster).get(cluster_id)
-            cluster_json = {'cluster': m.Cluster.__marshmallow__().dump(cluster).data}
-            return json.dumps(cluster_json)
+        if 'sync' in request.json and request.json['sync'] :
+            if inv_host is not None:
+                status, inv_cluster, inv_servers = inv_host.get_cluster(cluster.inventory_key)
+                if status == 'existing':
+                    inventory.update_cluster(inv_cluster, inv_servers)
+                elif status == 'deleted':
+                    inventory.delete_cluster(cluster.inventory_key)
+                cluster = db.query(m.Cluster).get(cluster_id)
+                cluster_json = {'cluster': m.Cluster.__marshmallow__().dump(cluster).data}
+                return json.dumps(cluster_json)
+            else:
+                abort(500, 'impossible to update inventory_cluster')
         else:
-            abort(500, 'impossible to update inventory_cluster')
+            cluster_def = schemas.ClusterPostSchema().load(request.json).data
+            print cluster_def
+            cluster.haproxy_backend_id = cluster_def['haproxy_backend_id']
+            if cluster.haproxy_backend_id == 0:
+                cluster.haproxy_backend_id = None
+            db.commit()
+            print  m.Cluster.__marshmallow__().dump(cluster).data
+            return json.dumps({'cluster': m.Cluster.__marshmallow__().dump(cluster).data})
 
     # WITH ADMIN PANEL
     cluster_def = schemas.ClusterPostSchema().load(request.json).data

@@ -44,6 +44,11 @@ class RepositorySchema(BaseSchema):
         return ids
 
 
+class HaproxyBackendSchema(BaseSchema):
+    class Meta(BaseSchema.Meta):
+        model = m.HaproxyBackend
+
+
 class ServerSchema(BaseSchema):
     class Meta(BaseSchema.Meta):
         model = m.Server
@@ -57,6 +62,7 @@ class ClusterSchema(BaseSchema):
         model = m.Cluster
 
     servers = fields.Method("format_servers")
+    haproxy_backend_id = fields.Integer(missing=None)
 
     def format_servers(self, obj):
         return [{
@@ -78,6 +84,7 @@ class ClusterPostSchema(Schema):
         strict = True
     name = fields.String()
     haproxy_host = fields.String(missing=None)
+    haproxy_backend_id = fields.Integer(missing=None)
     servers = fields.List(fields.Nested(_InnerClusterPostSchema))
 
 

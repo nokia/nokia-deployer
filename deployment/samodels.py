@@ -86,6 +86,17 @@ class User(Base):
         return out
 
 
+class HaproxyBackend(Base):
+    __tablename__ = "haproxy_backends"
+
+    id = sa.Column(sa.Integer(), nullable=False, primary_key=True, autoincrement=True)
+    name = sa.Column(sa.String(), nullable=False, unique=True)
+    haproxy_host = sa.Column(sa.String())
+    cluster_key = sa.Column(sa.String())
+    inventory_key = sa.Column(sa.String(255), nullable=True, unique=True)
+    updated_at = sa.Column(sa.DateTime(), nullable=True)
+
+
 # For those not familiar with SQLAlchemy,
 # see http://docs.sqlalchemy.org/en/latest/orm/basic_relationships.html#association-pattern
 class ClusterServerAssociation(Base):
@@ -123,10 +134,12 @@ class Cluster(Base):
     id = sa.Column(sa.Integer(), nullable=False, primary_key=True, autoincrement=True)
     name = sa.Column(sa.String(), nullable=False, unique=True)
     haproxy_host = sa.Column(sa.String())
+    haproxy_backend_id = sa.Column(sa.Integer, sa.ForeignKey("haproxy_backends.id"), nullable=True)
     inventory_key = sa.Column(sa.String(255), nullable=True, unique=True) #mySQL allows multiple NUll values with a UNIQUE constraint
     updated_at = sa.Column(sa.DateTime(), nullable=True)
     servers = orm.relationship("ClusterServerAssociation", back_populates="cluster_def")
-    environments = orm.relationship("Environment", secondary="environments_clusters", back_populates="clusters")
+    environments = orm.relationship("Environment", secondary=environments_clusters, back_populates="clusters")
+    haproxy_backend_def = orm.relationship('HaproxyBackend')
 
     @property
     def activated_servers(self):
@@ -151,7 +164,6 @@ class OneServerCluster(object):
     @property
     def activated_servers(self):
         return [s.server_def for s in self.servers if s.server_def.activated]
-
 
 
 class Repository(Base):
@@ -194,7 +206,7 @@ class Environment(Base):
     repository_id = sa.Column(sa.Integer, sa.ForeignKey("repositories.id"), nullable=False)
 
     repository = orm.relationship("Repository", back_populates="environments")
-    clusters = orm.relationship("Cluster", secondary="environments_clusters", back_populates="environments")
+    clusters = orm.relationship("Cluster", secondary=environments_clusters, back_populates="environments")
     deployments = orm.relationship("DeploymentView", back_populates="environment")
 
     @property
