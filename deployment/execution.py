@@ -576,7 +576,7 @@ def run_and_delete_deploy(host, remote_working_directory, environment_name, comm
 
 def get_haproxy_host(cluster):
     host = None
-    if cluster.haproxy_backend_id is not None:
+    if hasattr(cluster, 'haproxy_backend_id') and cluster.haproxy_backend_id is not None:
         host = cluster.haproxy_backend_def.haproxy_host
     if host is None:
         host = cluster.haproxy_host
