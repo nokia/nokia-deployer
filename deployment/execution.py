@@ -585,7 +585,7 @@ def get_haproxy_host(cluster):
 
 def get_servers_keys(cluster):
     normalized_haproxy_keys = []
-    if cluster.haproxy_backend_id is not None:
+    if hasattr(cluster, 'haproxy_backend_id') and cluster.haproxy_backend_id is not None:
         backend_name = cluster.haproxy_backend_def.name
         for server in cluster.servers:
             server_key = server.server_def.name.split('.')[0].upper() # assuming there in no dot in servers' name
