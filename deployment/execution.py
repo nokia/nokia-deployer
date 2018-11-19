@@ -618,9 +618,11 @@ def ensure_clusters_up(clusters, haproxy_auth):
         host = get_haproxy_host(cluster)
         if host is None:
             continue
-        keys = get_servers_keys(cluster)
-        # Will raise an exception if the cluster is not UP (I know, I know... TODO refactor)
-        haproxy_action(host, keys, haproxy_auth, 'UP', HAProxyAction.ENABLE)
+        hosts = host.split(",")
+        for host in hosts:
+            keys = get_servers_keys(cluster)
+            # Will raise an exception if the cluster is not UP (I know, I know... TODO refactor)
+            haproxy_action(host, keys, haproxy_auth, 'UP', HAProxyAction.ENABLE)
 
 
 def cluster_action(clusters, haproxy_auth, action):
@@ -636,8 +638,10 @@ def cluster_action(clusters, haproxy_auth, action):
             continue
         servers_description = ", ".join("{} ({})".format(server.server_def.name, server.haproxy_key) for server in cluster.servers)
         yield LogEntry('{} cluster {} (servers {})'.format(verb, cluster.name, servers_description))
-        server_keys = get_servers_keys(cluster)
-        haproxy_action(haproxy_host, server_keys, haproxy_auth, '', action)
+        hosts = haproxy_host.split(",")
+        for haproxy_host in hosts:
+            server_keys = get_servers_keys(cluster)
+            haproxy_action(haproxy_host, server_keys, haproxy_auth, '', action)
 
 
 def run_local_tests(environment, local_repo_path, branch, commit, host, mail_sender, mail_report_to):
