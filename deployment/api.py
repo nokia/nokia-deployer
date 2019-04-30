@@ -198,7 +198,7 @@ def notify(provider, db):
 
     repo = request.json['repository']
     if 'full_name' not in repo:
-        pattern = 'git@([a-zA-Z0-9\.]+):([a-zA-Z0-9\.\/]+)\.git'  # git@gitlab.corp.withings.com:platform/wcs.git
+        pattern = 'git@([a-zA-Z0-9\.]+):([a-zA-Z0-9\.\/\-]+)\.git'  # git@gitlab.corp.withings.com:platform/wcs.git
         matches = re.match(pattern, repo['git_ssh_url'])
         if matches:
             logger.info("notify match:[%s]" % str(json.dumps(matches.groups())))
