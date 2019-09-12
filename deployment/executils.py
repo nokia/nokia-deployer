@@ -38,7 +38,7 @@ class Host(object):
         return klass(server.name, username, server.port)
 
 
-def run_cmd_by_ssh(host, cmd, timeout=600):
+def run_cmd_by_ssh(host, cmd, timeout=900):
     """
     Args:
         host (Host)
