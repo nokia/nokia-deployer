@@ -171,7 +171,7 @@ class GraphiteNotifier(object):
         deployment = event.payload["deployment"]
         if deployment.status != m.DeploymentStatus.COMPLETE.to_db_format():
             return
-        metric_name = "{}.deploy.{}".format(
+        metric_name = "deploy.{}.{}".format(
             GraphiteNotifier.sanitize_for_graphite(deployment.environment.name),
             GraphiteNotifier.sanitize_for_graphite(deployment.environment.repository.name)
         )
